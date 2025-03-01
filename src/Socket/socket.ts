@@ -238,7 +238,7 @@ export const makeSocket = (config: SocketConfig) => {
 
 		logger.trace({ handshake }, 'handshake recv from WA')
 
-		const keyEnc = await noise.processHandshake(handshake, creds.noiseKey)
+		const keyEnc = noise.processHandshake(handshake, creds.noiseKey)
 
 		let node: proto.IClientPayload
 		if(!creds.me) {
@@ -671,7 +671,7 @@ export const makeSocket = (config: SocketConfig) => {
 	})
 
 	ws.on('CB:ib,,offline_preview', (node: BinaryNode) => {
-		logger.info('offline preview received', JSON.stringify(node))
+	  logger.info('offline preview received', node)
 		sendNode({
 			tag: 'ib',
 			attrs: {},

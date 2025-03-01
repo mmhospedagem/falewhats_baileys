@@ -1,5 +1,5 @@
 import { AxiosRequestConfig } from 'axios'
-//import type { Logger } from 'pino'
+import type { Logger } from 'pino'
 import { proto } from '../../WAProto'
 import { AuthenticationCreds, BaileysEventEmitter, CacheStore, Chat, GroupMetadata, ParticipantAction, RequestJoinAction, RequestJoinMethod, SignalKeyStoreWithTransaction, SocketConfig, WAMessageStubType } from '../Types'
 import { getContentType, normalizeMessageContent } from '../Utils/messages'
@@ -7,7 +7,6 @@ import { areJidsSameUser, isJidBroadcast, isJidStatusBroadcast, jidNormalizedUse
 import { aesDecryptGCM, hmacSign } from './crypto'
 import { getKeyAuthor, toNumber } from './generics'
 import { downloadAndProcessHistorySyncNotification } from './history'
-import { ILogger } from './logger'
 
 type ProcessMessageContext = {
 	shouldProcessHistoryMsg: boolean
@@ -16,7 +15,7 @@ type ProcessMessageContext = {
 	keyStore: SignalKeyStoreWithTransaction
 	ev: BaileysEventEmitter
 	getMessage: SocketConfig['getMessage']
-	logger?: ILogger
+	logger?: Logger
 	options: AxiosRequestConfig<{}>
 }
 
@@ -170,7 +169,6 @@ const processMessage = async(
 	const isRealMsg = isRealMessage(message, meId)
 
 	if(isRealMsg) {
-		chat.messages = [{ message }]
 		chat.conversationTimestamp = toNumber(message.messageTimestamp)
 		// only increment unread count if not CIPHERTEXT and from another person
 		if(shouldIncrementChatUnread(message)) {

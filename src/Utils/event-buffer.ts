@@ -1,9 +1,8 @@
 import EventEmitter from 'events'
-//import { Logger } from 'pino'
+import { Logger } from 'pino'
 import { proto } from '../../WAProto'
 import { BaileysEvent, BaileysEventEmitter, BaileysEventMap, BufferedEventData, Chat, ChatUpdate, Contact, WAMessage, WAMessageStatus } from '../Types'
 import { trimUndefined } from './generics'
-import { ILogger } from './logger'
 import { updateMessageWithReaction, updateMessageWithReceipt } from './messages'
 import { isRealMessage, shouldIncrementChatUnread } from './process-message'
 
@@ -60,8 +59,7 @@ type BaileysBufferableEventEmitter = BaileysEventEmitter & {
  * making the data processing more efficient.
  * @param ev the baileys event emitter
  */
-export const makeEventBuffer = (logger: ILogger): BaileysBufferableEventEmitter => {
-
+export const makeEventBuffer = (logger: Logger): BaileysBufferableEventEmitter => {
 	const ev = new EventEmitter()
 	const historyCache = new Set<string>()
 
@@ -192,7 +190,7 @@ function append<E extends BufferableEvent>(
 	event: E,
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	eventData: any,
-	logger: ILogger
+	logger: Logger
 ) {
 	switch (event) {
 	case 'messaging-history.set':

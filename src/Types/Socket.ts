@@ -1,10 +1,9 @@
 
 import { AxiosRequestConfig } from 'axios'
 import type { Agent } from 'https'
-//import type { Logger } from 'pino'
+import type { Logger } from 'pino'
 import type { URL } from 'url'
 import { proto } from '../../WAProto'
-import { ILogger } from '../Utils/logger'
 import { AuthenticationState, SignalAuthState, TransactionCapabilityOptions } from './Auth'
 import { GroupMetadata } from './GroupMetadata'
 import { MediaConnInfo } from './Message'
@@ -39,8 +38,8 @@ export type SocketConfig = {
 	mobile?: boolean
     /** proxy agent */
     agent?: Agent
-    /** logger */
-    logger: ILogger
+    /** pino logger */
+    logger: Logger
     /** version to connect with */
     version: WAVersion
     /** override browser config */
