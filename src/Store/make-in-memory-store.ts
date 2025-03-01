@@ -1,6 +1,6 @@
 import type KeyedDB from '@adiwajshing/keyed-db'
 import type { Comparable } from '@adiwajshing/keyed-db/lib/Types'
-import type { Logger } from 'pino'
+//import type { Logger } from 'pino'
 import { proto } from '../../WAProto'
 import { DEFAULT_CONNECTION_CONFIG } from '../Defaults'
 import type makeMDSocket from '../Socket'
@@ -8,6 +8,7 @@ import type { BaileysEventEmitter, Chat, ConnectionState, Contact, GroupMetadata
 import { Label } from '../Types/Label'
 import { LabelAssociation, LabelAssociationType, MessageLabelAssociation } from '../Types/LabelAssociation'
 import { md5, toNumber, updateMessageWithReaction, updateMessageWithReceipt } from '../Utils'
+import { ILogger } from '../Utils/logger'
 import { jidDecode, jidNormalizedUser } from '../WABinary'
 import makeOrderedDictionary from './make-ordered-dictionary'
 import { ObjectRepository } from './object-repository'
@@ -29,7 +30,7 @@ export const waLabelAssociationKey: Comparable<LabelAssociation, string> = {
 export type BaileysInMemoryStoreConfig = {
 	chatKey?: Comparable<Chat, string>
 	labelAssociationKey?: Comparable<LabelAssociation, string>
-	logger?: Logger
+	logger?: ILogger
 	socket?: WASocket
 }
 
@@ -39,7 +40,7 @@ export default (config: BaileysInMemoryStoreConfig) => {
 	const socket = config.socket
 	const chatKey = config.chatKey || waChatKey(true)
 	const labelAssociationKey = config.labelAssociationKey || waLabelAssociationKey
-	const logger: Logger = config.logger || DEFAULT_CONNECTION_CONFIG.logger.child({ stream: 'in-mem-store' })
+	const logger: ILogger = config.logger || DEFAULT_CONNECTION_CONFIG.logger.child({ stream: 'in-mem-store' })
 	const KeyedDB = require('@adiwajshing/keyed-db').default
 
 	const chats = new KeyedDB(chatKey, c => c.id) as KeyedDB<Chat, string>
