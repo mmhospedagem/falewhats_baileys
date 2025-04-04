@@ -4,8 +4,15 @@ export class USyncUser {
 	phone: string
 	type: string
 
+	personaId: string
+
 	withId(id: string) {
 		this.id = id
+		return this
+	}
+
+	withPersonaId(personaId: string) {
+		this.personaId = personaId
 		return this
 	}
 

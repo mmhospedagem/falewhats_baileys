@@ -565,6 +565,9 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 		ids: string[],
 		retryNode: BinaryNode
 	) => {
+
+		// todo: implement a cache to store the last 256 sent messages (copy whatsmeow)
+
 		const msgs = await Promise.all(ids.map(id => getMessage({ ...key, id })))
 		const remoteJid = key.remoteJid!
 		const participant = key.participant || remoteJid
@@ -730,15 +733,25 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 	}
 
 	const handleMessage = async(node: BinaryNode) => {
+		
 		if(shouldIgnoreJid(node.attrs.from) && node.attrs.from !== '@s.whatsapp.net') {
 			logger.debug({ key: node.attrs.key }, 'ignored message')
 			await sendMessageAck(node)
 			return
 		}
 
+		const encNode = getBinaryNodeChild(node, 'enc')
+
+		// TODO: temporary fix for crashes and issues resulting of failed msmsg decryption
+		if(encNode && encNode.attrs.type === 'msmsg') {
+			logger.debug({ key: node.attrs.key }, 'ignored msmsg')
+			await sendMessageAck(node)
+			return
+		}
+
 		let response: string | undefined
 
-		if(getBinaryNodeChild(node, 'unavailable') && !getBinaryNodeChild(node, 'enc')) {
+		if(getBinaryNodeChild(node, 'unavailable') && !encNode) {
 			await sendMessageAck(node)
 			const { key } = decodeMessageNode(node, authState.creds.me!.id, authState.creds.me!.lid || '').fullMessage
 			response = await requestPlaceholderResend(key)
