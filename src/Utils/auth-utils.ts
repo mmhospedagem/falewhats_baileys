@@ -17,6 +17,7 @@ export function makeCacheableSignalKeyStore(
 	logger?: Logger,
 	_cache?: CacheStore
 ): SignalKeyStore {
+
 	const cache = _cache || new NodeCache({
 		stdTTL: DEFAULT_CACHE_TTLS.SIGNAL_STORE, // 5 minutes
 		useClones: false,
@@ -72,6 +73,7 @@ export function makeCacheableSignalKeyStore(
 			await store.clear?.()
 		}
 	}
+	
 }
 
 /**
