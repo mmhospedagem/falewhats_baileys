@@ -128,23 +128,16 @@ export const configureSuccessfulPairing = (
 
 	const bizName = businessNode?.attrs.name
 	const jid = deviceNode.attrs.jid
-	const isHosted = !!businessNode
 
 	const { details, hmac } = proto.ADVSignedDeviceIdentityHMAC.decode(deviceIdentityNode.content as Buffer)
 	// check HMAC matches
-	const advSign = isHosted
-		? hmacSign(Buffer.concat([Buffer.from([6, 5]), details!]), Buffer.from(advSecretKey, 'base64'))
-		: hmacSign(details!, Buffer.from(advSecretKey, 'base64'))
-	
+	const advSign = hmacSign(details, Buffer.from(advSecretKey, 'base64'))
 	if(Buffer.compare(hmac, advSign) !== 0) {
 		throw new Boom('Invalid account signature')
 	}
 
 	const account = proto.ADVSignedDeviceIdentity.decode(details)
-	const accountMsg = isHosted
-		? Buffer.concat([Buffer.from([6, 5]), deviceDetails!, signedIdentityKey.public])
-		: Buffer.concat([Buffer.from([6, 0]), deviceDetails!, signedIdentityKey.public])
-
+	const { accountSignatureKey, accountSignature, details: deviceDetails } = account
 	// verify the device signature matches
 	const accountMsg = Buffer.concat([ Buffer.from([6, 0]), deviceDetails, signedIdentityKey.public ])
 	if(!Curve.verify(accountSignatureKey, accountMsg, accountSignature)) {
@@ -152,9 +145,7 @@ export const configureSuccessfulPairing = (
 	}
 
 	// sign the details with our identity key
-	const devicePrefix = isHosted ? Buffer.from([6, 6]) : Buffer.from([6, 1])
-	const deviceMsg = Buffer.concat([devicePrefix, deviceDetails!, signedIdentityKey.public, accountSignatureKey!])
-	
+	const deviceMsg = Buffer.concat([ Buffer.from([6, 1]), deviceDetails, signedIdentityKey.public, accountSignatureKey ])
 	account.deviceSignature = Curve.sign(signedIdentityKey.private, deviceMsg)
 
 	const identity = createSignalIdentity(jid, accountSignatureKey)
