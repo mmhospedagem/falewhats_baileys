@@ -7,7 +7,7 @@ import { LabelActionBody } from '../Types/Label'
 import { chatModificationToAppPatch, ChatMutationMap, decodePatches, decodeSyncdSnapshot, encodeSyncdPatch, extractSyncdPatches, generateProfilePicture, getHistoryMsg, newLTHashState, processSyncAction } from '../Utils'
 import { makeMutex } from '../Utils/make-mutex'
 import processMessage from '../Utils/process-message'
-import { BinaryNode, getBinaryNodeChild, getBinaryNodeChildren, jidNormalizedUser, reduceBinaryNodeToDictionary, S_WHATSAPP_NET } from '../WABinary'
+import { BinaryNode, getBinaryNodeChild, getBinaryNodeChildren, jidDecode, jidNormalizedUser, reduceBinaryNodeToDictionary, S_WHATSAPP_NET } from '../WABinary'
 import { USyncQuery, USyncUser } from '../WAUSync'
 import { makeUSyncSocket } from './usync'
 
@@ -219,8 +219,14 @@ export const makeChatsSocket = (config: SocketConfig) => {
 	}
 
 	/** update the profile picture for yourself or a group */
-	const updateProfilePicture = async(jid: string, content: WAMediaUpload) => {
+	const updateProfilePicture = async (
+		jid: string,
+		content: WAMediaUpload,
+		dimensions?: { width: number; height: number }
+	) => {
+
 		let targetJid
+
 		if(!jid) {
 			throw new Boom('Illegal no-jid profile update. Please specify either your ID or the ID of the chat you wish to update')
 		}
@@ -229,7 +235,8 @@ export const makeChatsSocket = (config: SocketConfig) => {
 			targetJid = jidNormalizedUser(jid) // in case it is someone other than us
 		}
 
-		const { img } = await generateProfilePicture(content)
+		const { img } = await generateProfilePicture(content, dimensions)
+		
 		await query({
 			tag: 'iq',
 			attrs: {
@@ -585,16 +592,20 @@ export const makeChatsSocket = (config: SocketConfig) => {
 			await sendNode({
 				tag: 'presence',
 				attrs: {
-					name: me.name,
+					name: me.name.replace(/@/g, ''),
 					type
 				}
 			})
 		} else {
+
+			const { server } = jidDecode(toJid)!
+			const isLid = server === 'lid'
+			
 			await sendNode({
 				tag: 'chatstate',
 				attrs: {
-					from: me.id,
-					to: toJid!,
+					from: isLid ? me.lid! : me.id,
+					to: toJid!
 				},
 				content: [
 					{

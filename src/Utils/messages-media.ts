@@ -141,7 +141,12 @@ export const encodeBase64EncodedStringForUpload = (b64: string) => (
 	)
 )
 
-export const generateProfilePicture = async(mediaUpload: WAMediaUpload) => {
+export const generateProfilePicture = async (
+	mediaUpload: WAMediaUpload,
+	dimensions?: { width: number; height: number }
+) => {
+	const { width: w = 640, height: h = 640 } = dimensions || {}
+
 	let bufferOrFilePath: Buffer | string
 	if(Buffer.isBuffer(mediaUpload)) {
 		bufferOrFilePath = mediaUpload
@@ -155,7 +160,7 @@ export const generateProfilePicture = async(mediaUpload: WAMediaUpload) => {
 	let img: Promise<Buffer>
 	if('sharp' in lib && typeof lib.sharp?.default === 'function') {
 		img = lib.sharp.default(bufferOrFilePath)
-			.resize(640, 640)
+			.resize(w, h)
 			.jpeg({
 				quality: 50,
 			})
@@ -166,10 +171,8 @@ export const generateProfilePicture = async(mediaUpload: WAMediaUpload) => {
 		const min = Math.min(jimp.getWidth(), jimp.getHeight())
 		const cropped = jimp.crop(0, 0, min, min)
 
-		img = cropped
-			.quality(50)
-			.resize(640, 640, RESIZE_BILINEAR)
-			.getBufferAsync(MIME_JPEG)
+		img = cropped.quality(50).resize(w, h, RESIZE_BILINEAR).getBufferAsync(MIME_JPEG)
+
 	} else {
 		throw new Boom('No image processing library available')
 	}
@@ -188,17 +191,22 @@ export const mediaMessageSHA256B64 = (message: WAMessageContent) => {
 export async function getAudioDuration(buffer: Buffer | string | Readable) {
 	const musicMetadata = await import('music-metadata')
 	let metadata: IAudioMetadata
+
+	const options = {
+		duration: true
+	}
+
 	if(Buffer.isBuffer(buffer)) {
-		metadata = await musicMetadata.parseBuffer(buffer, undefined, { duration: true })
+		metadata = await musicMetadata.parseBuffer(buffer, undefined, options)
 	} else if(typeof buffer === 'string') {
 		const rStream = createReadStream(buffer)
 		try {
-			metadata = await musicMetadata.parseStream(rStream, undefined, { duration: true })
+			metadata = await musicMetadata.parseFile(buffer, options)
 		} finally {
 			rStream.destroy()
 		}
 	} else {
-		metadata = await musicMetadata.parseStream(buffer, undefined, { duration: true })
+		metadata = await musicMetadata.parseStream(buffer, undefined, options)
 	}
 
 	return metadata.format.duration
@@ -464,7 +472,11 @@ export const downloadContentFromMessage = (
 	type: MediaType,
 	opts: MediaDownloadOptions = { }
 ) => {
-	const downloadUrl = url || getUrlFromDirectPath(directPath!)
+	const isValidMediaUrl = url?.startsWith('https://mmg.whatsapp.net/')
+	const downloadUrl = isValidMediaUrl ? url : getUrlFromDirectPath(directPath!)
+	if (!downloadUrl) {
+		throw new Boom('No valid media URL or directPath present in message', { statusCode: 400 })
+	}
 	const keys = getMediaKeys(mediaKey, type)
 
 	return downloadEncryptedContent(downloadUrl, keys, opts)
