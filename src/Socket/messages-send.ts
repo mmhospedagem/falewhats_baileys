@@ -420,13 +420,6 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 						devices.push(...additionalDevices)
 					}
 
-					if (groupData?.ephemeralDuration && groupData.ephemeralDuration > 0) {
-						additionalAttributes = {
-							...additionalAttributes,
-							expiration: groupData.ephemeralDuration.toString()
-						}
-					}
-
 					const patched = await patchMessageBeforeSending(message, devices.map(d => jidEncode(d.user, isLid ? 'lid' : 's.whatsapp.net', d.device)))
 					const bytes = encodeWAMessage(patched)
 
