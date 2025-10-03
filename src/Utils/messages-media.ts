@@ -627,7 +627,6 @@ export const getWAUploadToServer = (
 							'Content-Type': 'application/octet-stream',
 							'Origin': DEFAULT_ORIGIN
 						},
-						duplex: 'half',
 						httpsAgent: fetchAgent,
 						timeout: timeoutMs,
 						responseType: 'json',
