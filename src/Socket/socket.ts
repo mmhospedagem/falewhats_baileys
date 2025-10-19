@@ -161,11 +161,12 @@ export const makeSocket = (config: SocketConfig) => {
 			ws.on('frame', onOpen)
 			ws.on('close', onClose)
 			ws.on('error', onClose)
-		}).finally(() => {
-			ws.off('frame', onOpen)
-			ws.off('close', onClose)
-			ws.off('error', onClose)
 		})
+			.finally(() => {
+				ws.off('frame', onOpen)
+				ws.off('close', onClose)
+				ws.off('error', onClose)
+			})
 
 		if(sendMsg) {
 			sendRawMessage(sendMsg).catch(onClose!)
