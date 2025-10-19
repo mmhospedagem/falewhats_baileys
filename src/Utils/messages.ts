@@ -510,6 +510,16 @@ export const generateWAMessageContent = async(
 		m.requestPhoneNumberMessage = {}
 	} else if('interactiveMessage' in message) {
 		m.interactiveMessage = message.interactiveMessage
+	} else if ('limitSharing' in message) {
+		m.protocolMessage = {
+			type: proto.Message.ProtocolMessage.Type.LIMIT_SHARING,
+			limitSharing: {
+				sharingLimited: message.limitSharing === true,
+				trigger: 1,
+				limitSharingSettingTimestamp: Date.now(),
+				initiatedByMe: true
+			}
+		}
 	} else {
 		m = await prepareWAMessageMedia(
 			message,
