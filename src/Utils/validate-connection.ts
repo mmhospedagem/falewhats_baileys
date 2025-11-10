@@ -94,12 +94,7 @@ export const generateRegistrationNode = (
 			inlineInitialPayloadInE2EeMsg: true,
 			supportCallLogHistory: false,
 			supportBotUserAgentChatHistory: true,
-			supportCagReactionsAndPolls: true,
-			supportBizHostedMsg: true,
-			supportRecentSyncChunkMessageCountTuning: true,
-			supportHostedGroupMsg: true,
-			supportFbidBotChatHistory: true,
-			supportMessageAssociation: true
+			supportCagReactionsAndPolls: true
 		}
 	}
 
