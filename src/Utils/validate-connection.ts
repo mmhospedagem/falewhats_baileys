@@ -70,7 +70,9 @@ export const generateLoginNode = (userJid: string, config: SocketConfig): proto.
 		passive: true,
 		pull: true,
 		username: +user,
-		device: device
+		device: device,
+		// TODO: investigate (hard set as false atm)
+		lidDbMigrated: false
 	}
 	return proto.ClientPayload.fromObject(payload)
 }
@@ -104,6 +106,7 @@ export const generateRegistrationNode = (
 			supportCallLogHistory: false,
 			supportBotUserAgentChatHistory: true,
 			supportCagReactionsAndPolls: true,
+			supportBizHostedMsg: true,
 			supportRecentSyncChunkMessageCountTuning: true,
 			supportHostedGroupMsg: true,
 			supportFbidBotChatHistory: true,
