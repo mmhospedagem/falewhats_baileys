@@ -89,6 +89,7 @@ export const generateRegistrationNode = (
 		os: config.browser[0],
 		platformType: getPlatformType(config.browser[1]),
 		requireFullSync: config.syncFullHistory,
+<<<<<<< HEAD
 		historySyncConfig: {
 			storageQuotaMb: 569150,
 			inlineInitialPayloadInE2EeMsg: true,
@@ -96,6 +97,15 @@ export const generateRegistrationNode = (
 			supportBotUserAgentChatHistory: true,
 			supportCagReactionsAndPolls: true
 		}
+=======
+    historySyncConfig: {
+      storageQuotaMb: 569150,
+      inlineInitialPayloadInE2EeMsg: true,
+      supportCallLogHistory: false,
+      supportBotUserAgentChatHistory: true,
+      supportCagReactionsAndPolls: true
+    }
+>>>>>>> parent of dcb1be0 (proto teste)
 	}
 
 	const companionProto = proto.DeviceProps.encode(companion).finish()
