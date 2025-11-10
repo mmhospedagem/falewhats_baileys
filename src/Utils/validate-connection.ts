@@ -1,7 +1,10 @@
 import { Boom } from '@hapi/boom'
 import { createHash } from 'crypto'
 import { proto } from '../../WAProto'
-import { KEY_BUNDLE_TYPE } from '../Defaults'
+import {  KEY_BUNDLE_TYPE,
+  WA_ADV_ACCOUNT_SIG_PREFIX,
+  WA_ADV_DEVICE_SIG_PREFIX,
+  WA_ADV_HOSTED_ACCOUNT_SIG_PREFIX } from '../Defaults'
 import type { AuthenticationCreds, SignalCreds, SocketConfig } from '../Types'
 import { BinaryNode, getBinaryNodeChild, jidDecode, S_WHATSAPP_NET } from '../WABinary'
 import { Curve, hmacSign } from './crypto'
@@ -86,6 +89,13 @@ export const generateRegistrationNode = (
 		os: config.browser[0],
 		platformType: getPlatformType(config.browser[1]),
 		requireFullSync: config.syncFullHistory,
+    historySyncConfig: {
+      storageQuotaMb: 569150,
+      inlineInitialPayloadInE2EeMsg: true,
+      supportCallLogHistory: false,
+      supportBotUserAgentChatHistory: true,
+      supportCagReactionsAndPolls: true
+    }
 	}
 
 	const companionProto = proto.DeviceProps.encode(companion).finish()
