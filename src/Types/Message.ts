@@ -117,31 +117,8 @@ type ViewOnce = {
 	viewOnce?: boolean
 }
 
-type Buttonable = {
-    /** add buttons to the message  */
-    buttons?: proto.Message.ButtonsMessage.IButton[]
-}
-type Templatable = {
-    /** add buttons to the message (conflicts with normal buttons)*/
-    templateButtons?: proto.IHydratedTemplateButton[]
-
-    footer?: string
-}
-
 type Editable = {
 	edit?: WAMessageKey
-}
-type Listable = {
-    /** Sections of the List */
-    sections?: proto.Message.ListMessage.ISection[]
-
-    /** Title of a List Message only */
-    title?: string
-
-    /** Text of the bnutton on the list (required) */
-    buttonText?: string
-    listType?: proto.Message.ListMessage.ListType
-
 }
 type WithDimensions = {
 	width?: number
@@ -234,68 +211,74 @@ export type WASendableProduct = Omit<proto.Message.ProductMessage.IProductSnapsh
 }
 
 export type AnyRegularMessageContent = (
-    ({
-	    text: string
-        linkPreview?: WAUrlInfo | null
-    }
-    & Mentionable & Contextable & Buttonable & Templatable & Listable & Editable)
-    | AnyMediaMessageContent
-    | ({
-        poll: PollMessageOptions
-    } & Mentionable & Contextable & Buttonable & Templatable & Editable)
-    | {
-        contacts: {
-            displayName?: string
-            contacts: proto.Message.IContactMessage[]
-        }
-    }
-    | {
-        location: WALocationMessage
-    }
-    | { react: proto.Message.IReactionMessage }
-    | {
-        buttonReply: ButtonReplyInfo
-        type: 'template' | 'plain'
-    }
-    | {
-        groupInvite: GroupInviteInfo
-    }
-    | {
-        listReply: Omit<proto.Message.IListResponseMessage, 'contextInfo'>
-    }
-    | {
-        pin: WAMessageKey
-        type: proto.PinInChat.Type
-        /**
-         * 24 hours, 7 days, 30 days
-         */
-        time?: 86400 | 604800 | 2592000
-    }
-    | {
-        product: WASendableProduct
-        businessOwnerJid?: string
-        body?: string
-        footer?: string
-    } | SharePhoneNumber | RequestPhoneNumber
-) & ViewOnce
+	| ({
+			text: string
+			linkPreview?: WAUrlInfo | null
+	  } & Mentionable &
+			Contextable &
+			Editable)
+	| AnyMediaMessageContent
+	| { event: EventMessageOptions }
+	| ({
+			poll: PollMessageOptions
+	  } & Mentionable &
+			Contextable &
+			Editable)
+	| {
+			contacts: {
+				displayName?: string
+				contacts: proto.Message.IContactMessage[]
+			}
+	  }
+	| {
+			location: WALocationMessage
+	  }
+	| { react: proto.Message.IReactionMessage }
+	| {
+			buttonReply: ButtonReplyInfo
+			type: 'template' | 'plain'
+	  }
+	| {
+			groupInvite: GroupInviteInfo
+	  }
+	| {
+			listReply: Omit<proto.Message.IListResponseMessage, 'contextInfo'>
+	  }
+	| {
+			pin: WAMessageKey
+			type: proto.PinInChat.Type
+			/**
+			 * 24 hours, 7 days, 30 days
+			 */
+			time?: 86400 | 604800 | 2592000
+	  }
+	| {
+			product: WASendableProduct
+			businessOwnerJid?: string
+			body?: string
+			footer?: string
+	  }
+	| SharePhoneNumber
+	| RequestPhoneNumber
+) &
+	ViewOnce
 
 export type AnyMessageContent =
 	| AnyRegularMessageContent
-	| 	{
+	| {
 			forward: WAMessage
 			force?: boolean
-	  	}
-	| 	{
+	  }
+	| {
 			/** Delete your message or anyone's message in a group (admin required) */
 			delete: WAMessageKey
-	  	}
-	| 	{
+	  }
+	| {
 			disappearingMessagesInChat: boolean | number
-	  	}
-	| 
-		{
-			interactiveMessage: proto.Message.IInteractiveMessage
-		}
+	  }
+	| {
+			limitSharing: boolean
+	  }
 
 export type GroupMetadataParticipants = Pick<GroupMetadata, 'participants'>
 
