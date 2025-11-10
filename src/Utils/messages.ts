@@ -566,18 +566,26 @@ export const generateWAMessageContent = async (
 		}
 	} else if ('requestPhoneNumber' in message) {
 		m.requestPhoneNumberMessage = {}
-	} else if ('limitSharing' in message) {
-		m.protocolMessage = {
-			type: proto.Message.ProtocolMessage.Type.LIMIT_SHARING,
-			limitSharing: {
-				sharingLimited: message.limitSharing === true,
-				trigger: 1,
-				limitSharingSettingTimestamp: Date.now(),
-				initiatedByMe: true
-			}
-		}
+	} else if('interactiveMessage' in message) {
+		m.interactiveMessage = message.interactiveMessage
 	} else {
-		m = await prepareWAMessageMedia(message, options)
+		m = await prepareWAMessageMedia(
+			message,
+			options
+		)
+	}
+	
+	if('sections' in message && !!message.sections) {
+		const listMessage: proto.Message.IListMessage = {
+			sections: message.sections,
+			buttonText: message.buttonText,
+			title: message.title,
+			footerText: message.footer,
+			description: message.text,
+			listType: message.hasOwnProperty('listType') ? message.listType : proto.Message.ListMessage.ListType.PRODUCT_LIST
+		}
+
+		m = { listMessage }
 	}
 
 	if ('viewOnce' in message && !!message.viewOnce) {
