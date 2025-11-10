@@ -1,14 +1,11 @@
 module.exports = {
-	'roots': [
-		'<rootDir>/src'
+	"roots": [
+		"<rootDir>/src"
 	],
-	'testMatch': [
-		'**/Tests/test.*.+(ts|tsx|js)',
+	"testMatch": [
+		"**/Tests/test.*.+(ts|tsx|js)",
 	],
-	'transform': {
-		'^.+\\.(ts|tsx)$': 'ts-jest'
-	},
-	moduleNameMapper: {
-		'^axios$': require.resolve('axios'),
+	"transform": {
+		"^.+\\.(ts|tsx)$": "ts-jest"
 	},
 }
