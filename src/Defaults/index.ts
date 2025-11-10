@@ -67,7 +67,11 @@ export const DEFAULT_CONNECTION_CONFIG: SocketConfig = {
   transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
   generateHighQualityLinkPreview: false,
   options: {},
-  getMessage: async () => undefined
+  getMessage: async () => undefined,
+  maxMsgRetryCount: 5,
+  patchMessageBeforeSending: msg => msg,
+  appStateMacVerification: { patch: false, snapshot: false },
+  countryCode: "BR"
 };
 
 export const MEDIA_PATH_MAP: { [T in MediaType]?: string } = {
