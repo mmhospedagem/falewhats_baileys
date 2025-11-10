@@ -67,15 +67,7 @@ export const DEFAULT_CONNECTION_CONFIG: SocketConfig = {
   transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
   generateHighQualityLinkPreview: false,
   options: {},
-  getMessage: async () => undefined,
-  groupMetadataCache: new NodeCache({
-    stdTTL: DEFAULT_CACHE_TTLS.GROUP_METADATA,
-    useClones: false
-  }),
-  sentMessagesCache: new NodeCache({
-    stdTTL: DEFAULT_CACHE_TTLS.SENT_MESSAGES,
-    useClones: false
-  })
+  getMessage: async () => undefined
 };
 
 export const MEDIA_PATH_MAP: { [T in MediaType]?: string } = {
