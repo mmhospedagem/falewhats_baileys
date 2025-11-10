@@ -12,6 +12,7 @@ import type {
 	RequestJoinMethod,
 	SignalKeyStoreWithTransaction,
 	SignalRepositoryWithLIDStore,
+	SocketConfig,
 	WAMessage,
 	WAMessageKey
 } from '../Types'
@@ -38,7 +39,8 @@ type ProcessMessageContext = {
 	creds: AuthenticationCreds
 	keyStore: SignalKeyStoreWithTransaction
 	ev: BaileysEventEmitter
-	logger?: ILogger
+	logger?: ILogger,
+	getMessage: SocketConfig['getMessage']
 	options: RequestInit
 	signalRepository: SignalRepositoryWithLIDStore
 }
@@ -184,7 +186,8 @@ const processMessage = async (
 		signalRepository,
 		keyStore,
 		logger,
-		options
+		options,
+		getMessage
 	}: ProcessMessageContext
 ) => {
 	const meId = creds.me!.id
@@ -465,7 +468,7 @@ const processMessage = async (
 				emitGroupRequestJoin(participant, action, method)
 				break
 		}
-	} /*  else if(content?.pollUpdateMessage) {
+	} else if(content?.pollUpdateMessage) {
 		const creationMsgKey = content.pollUpdateMessage.pollCreationMessageKey!
 		// we need to fetch the poll creation message to get the poll enc key
 		// TODO: make standalone, remove getMessage reference
@@ -513,7 +516,7 @@ const processMessage = async (
 				'poll creation message not found, cannot decrypt update'
 			)
 		}
-		} */
+	}
 
 	if (Object.keys(chat).length > 1) {
 		ev.emit('chats.update', [chat])
