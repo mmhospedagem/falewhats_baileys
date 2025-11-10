@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2018",
-    "module": "CommonJS",
+    "module": "commonjs",
     "experimentalDecorators": true,
     "allowJs": false,
     "checkJs": false,
