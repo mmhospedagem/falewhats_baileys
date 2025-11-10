@@ -68,10 +68,14 @@ export const DEFAULT_CONNECTION_CONFIG: SocketConfig = {
   generateHighQualityLinkPreview: false,
   options: {},
   getMessage: async () => undefined,
+
+  // ✅ novos campos obrigatórios
   maxMsgRetryCount: 5,
   patchMessageBeforeSending: msg => msg,
   appStateMacVerification: { patch: false, snapshot: false },
-  countryCode: "BR"
+  countryCode: "BR",
+  cachedGroupMetadata: undefined,
+  makeSignalRepository: undefined as any
 };
 
 export const MEDIA_PATH_MAP: { [T in MediaType]?: string } = {
