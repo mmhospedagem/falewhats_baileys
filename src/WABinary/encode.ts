@@ -1,245 +1,253 @@
-import * as constants from "./constants";
-import { FullJid, jidDecode } from "./jid-utils";
-import type { BinaryNode, BinaryNodeCodingOptions } from "./types";
+import * as constants from './constants'
+import { type FullJid, jidDecode } from './jid-utils'
+import type { BinaryNode, BinaryNodeCodingOptions } from './types'
 
 export const encodeBinaryNode = (
-  node: BinaryNode,
-  opts: Pick<BinaryNodeCodingOptions, "TAGS" | "TOKEN_MAP"> = constants,
-  buffer: number[] = [0]
+	node: BinaryNode,
+	opts: Pick<BinaryNodeCodingOptions, 'TAGS' | 'TOKEN_MAP'> = constants,
+	buffer: number[] = [0]
 ): Buffer => {
-  const encoded = encodeBinaryNodeInner(node, opts, buffer);
-  return Buffer.from(encoded);
-};
+	const encoded = encodeBinaryNodeInner(node, opts, buffer)
+	return Buffer.from(encoded)
+}
 
-export const encodeBinaryNodeInner = (
-  { tag, attrs, content }: BinaryNode,
-  opts: Pick<BinaryNodeCodingOptions, "TAGS" | "TOKEN_MAP"> = constants,
-  buffer: number[] = [0]
-) => {
-  const { TAGS, TOKEN_MAP } = opts;
+const encodeBinaryNodeInner = (
+	{ tag, attrs, content }: BinaryNode,
+	opts: Pick<BinaryNodeCodingOptions, 'TAGS' | 'TOKEN_MAP'>,
+	buffer: number[]
+): number[] => {
+	const { TAGS, TOKEN_MAP } = opts
 
-  const pushByte = (value: number) => buffer.push(value & 0xff);
+	const pushByte = (value: number) => buffer.push(value & 0xff)
 
-  const pushInt = (value: number, n: number, littleEndian = false) => {
-    for (let i = 0; i < n; i++) {
-      const curShift = littleEndian ? i : n - 1 - i;
-      buffer.push((value >> (curShift * 8)) & 0xff);
-    }
-  };
+	const pushInt = (value: number, n: number, littleEndian = false) => {
+		for (let i = 0; i < n; i++) {
+			const curShift = littleEndian ? i : n - 1 - i
+			buffer.push((value >> (curShift * 8)) & 0xff)
+		}
+	}
 
-  const pushBytes = (bytes: Uint8Array | Buffer | number[]) =>
-    bytes.forEach(b => buffer.push(b));
-  const pushInt16 = (value: number) => {
-    pushBytes([(value >> 8) & 0xff, value & 0xff]);
-  };
+	const pushBytes = (bytes: Uint8Array | Buffer | number[]) => {
+		for (const b of bytes) {
+			buffer.push(b)
+		}
+	}
 
-  const pushInt20 = (value: number) =>
-    pushBytes([(value >> 16) & 0x0f, (value >> 8) & 0xff, value & 0xff]);
-  const writeByteLength = (length: number) => {
-    if (length >= 4294967296) {
-      throw new Error("string too large to encode: " + length);
-    }
+	const pushInt16 = (value: number) => {
+		pushBytes([(value >> 8) & 0xff, value & 0xff])
+	}
 
-    if (length >= 1 << 20) {
-      pushByte(TAGS.BINARY_32);
-      pushInt(length, 4); // 32 bit integer
-    } else if (length >= 256) {
-      pushByte(TAGS.BINARY_20);
-      pushInt20(length);
-    } else {
-      pushByte(TAGS.BINARY_8);
-      pushByte(length);
-    }
-  };
+	const pushInt20 = (value: number) => pushBytes([(value >> 16) & 0x0f, (value >> 8) & 0xff, value & 0xff])
+	const writeByteLength = (length: number) => {
+		if (length >= 4294967296) {
+			throw new Error('string too large to encode: ' + length)
+		}
 
-  const writeStringRaw = (str: string) => {
-    const bytes = Buffer.from(str, "utf-8");
-    writeByteLength(bytes.length);
-    pushBytes(bytes);
-  };
+		if (length >= 1 << 20) {
+			pushByte(TAGS.BINARY_32)
+			pushInt(length, 4) // 32 bit integer
+		} else if (length >= 256) {
+			pushByte(TAGS.BINARY_20)
+			pushInt20(length)
+		} else {
+			pushByte(TAGS.BINARY_8)
+			pushByte(length)
+		}
+	}
 
-  const writeJid = ({ domainType, device, user, server }: FullJid) => {
-    if (typeof device !== "undefined") {
-      pushByte(TAGS.AD_JID);
-      pushByte(domainType || 0);
-      pushByte(device || 0);
-      writeString(user);
-    } else {
-      pushByte(TAGS.JID_PAIR);
-      if (user.length) {
-        writeString(user);
-      } else {
-        pushByte(TAGS.LIST_EMPTY);
-      }
+	const writeStringRaw = (str: string) => {
+		const bytes = Buffer.from(str, 'utf-8')
+		writeByteLength(bytes.length)
+		pushBytes(bytes)
+	}
 
-      writeString(server);
-    }
-  };
+	const writeJid = ({ domainType, device, user, server }: FullJid) => {
+		if (typeof device !== 'undefined') {
+			pushByte(TAGS.AD_JID)
+			pushByte(domainType || 0)
+			pushByte(device || 0)
+			writeString(user)
+		} else {
+			pushByte(TAGS.JID_PAIR)
+			if (user.length) {
+				writeString(user)
+			} else {
+				pushByte(TAGS.LIST_EMPTY)
+			}
 
-  const packNibble = (char: string) => {
-    switch (char) {
-      case "-":
-        return 10;
-      case ".":
-        return 11;
-      case "\0":
-        return 15;
-      default:
-        if (char >= "0" && char <= "9") {
-          return char.charCodeAt(0) - "0".charCodeAt(0);
-        }
+			writeString(server)
+		}
+	}
 
-        throw new Error(`invalid byte for nibble "${char}"`);
-    }
-  };
+	const packNibble = (char: string) => {
+		switch (char) {
+			case '-':
+				return 10
+			case '.':
+				return 11
+			case '\0':
+				return 15
+			default:
+				if (char >= '0' && char <= '9') {
+					return char.charCodeAt(0) - '0'.charCodeAt(0)
+				}
 
-  const packHex = (char: string) => {
-    if (char >= "0" && char <= "9") {
-      return char.charCodeAt(0) - "0".charCodeAt(0);
-    }
+				throw new Error(`invalid byte for nibble "${char}"`)
+		}
+	}
 
-    if (char >= "A" && char <= "F") {
-      return 10 + char.charCodeAt(0) - "A".charCodeAt(0);
-    }
+	const packHex = (char: string) => {
+		if (char >= '0' && char <= '9') {
+			return char.charCodeAt(0) - '0'.charCodeAt(0)
+		}
 
-    if (char >= "a" && char <= "f") {
-      return 10 + char.charCodeAt(0) - "a".charCodeAt(0);
-    }
+		if (char >= 'A' && char <= 'F') {
+			return 10 + char.charCodeAt(0) - 'A'.charCodeAt(0)
+		}
 
-    if (char === "\0") {
-      return 15;
-    }
+		if (char >= 'a' && char <= 'f') {
+			return 10 + char.charCodeAt(0) - 'a'.charCodeAt(0)
+		}
 
-    throw new Error(`Invalid hex char "${char}"`);
-  };
+		if (char === '\0') {
+			return 15
+		}
 
-  const writePackedBytes = (str: string, type: "nibble" | "hex") => {
-    if (str.length > TAGS.PACKED_MAX) {
-      throw new Error("Too many bytes to pack");
-    }
+		throw new Error(`Invalid hex char "${char}"`)
+	}
 
-    pushByte(type === "nibble" ? TAGS.NIBBLE_8 : TAGS.HEX_8);
+	const writePackedBytes = (str: string, type: 'nibble' | 'hex') => {
+		if (str.length > TAGS.PACKED_MAX) {
+			throw new Error('Too many bytes to pack')
+		}
 
-    let roundedLength = Math.ceil(str.length / 2.0);
-    if (str.length % 2 !== 0) {
-      roundedLength |= 128;
-    }
+		pushByte(type === 'nibble' ? TAGS.NIBBLE_8 : TAGS.HEX_8)
 
-    pushByte(roundedLength);
-    const packFunction = type === "nibble" ? packNibble : packHex;
+		let roundedLength = Math.ceil(str.length / 2.0)
+		if (str.length % 2 !== 0) {
+			roundedLength |= 128
+		}
 
-    const packBytePair = (v1: string, v2: string) => {
-      const result = (packFunction(v1) << 4) | packFunction(v2);
-      return result;
-    };
+		pushByte(roundedLength)
+		const packFunction = type === 'nibble' ? packNibble : packHex
 
-    const strLengthHalf = Math.floor(str.length / 2);
-    for (let i = 0; i < strLengthHalf; i++) {
-      pushByte(packBytePair(str[2 * i], str[2 * i + 1]));
-    }
+		const packBytePair = (v1: string, v2: string) => {
+			const result = (packFunction(v1) << 4) | packFunction(v2)
+			return result
+		}
 
-    if (str.length % 2 !== 0) {
-      pushByte(packBytePair(str[str.length - 1], "\x00"));
-    }
-  };
+		const strLengthHalf = Math.floor(str.length / 2)
+		for (let i = 0; i < strLengthHalf; i++) {
+			pushByte(packBytePair(str[2 * i]!, str[2 * i + 1]!))
+		}
 
-  const isNibble = (str: string) => {
-    if (str.length > TAGS.PACKED_MAX) {
-      return false;
-    }
+		if (str.length % 2 !== 0) {
+			pushByte(packBytePair(str[str.length - 1]!, '\x00'))
+		}
+	}
 
-    for (let i = 0; i < str.length; i++) {
-      const char = str[i];
-      const isInNibbleRange = char >= "0" && char <= "9";
-      if (!isInNibbleRange && char !== "-" && char !== ".") {
-        return false;
-      }
-    }
+	const isNibble = (str?: string) => {
+		if (!str || str.length > TAGS.PACKED_MAX) {
+			return false
+		}
 
-    return true;
-  };
+		for (const char of str) {
+			const isInNibbleRange = char >= '0' && char <= '9'
+			if (!isInNibbleRange && char !== '-' && char !== '.') {
+				return false
+			}
+		}
 
-  const isHex = (str: string) => {
-    if (str.length > TAGS.PACKED_MAX) {
-      return false;
-    }
+		return true
+	}
 
-    for (const char of str) {
-      const isInNibbleRange = char >= "0" && char <= "9";
-      if (!isInNibbleRange && !(char >= "A" && char <= "F")) {
-        return false;
-      }
-    }
+	const isHex = (str?: string) => {
+		if (!str || str.length > TAGS.PACKED_MAX) {
+			return false
+		}
 
-    return true;
-  };
+		for (const char of str) {
+			const isInNibbleRange = char >= '0' && char <= '9'
+			if (!isInNibbleRange && !(char >= 'A' && char <= 'F')) {
+				return false
+			}
+		}
 
-  const writeString = (str: string) => {
-    const tokenIndex = TOKEN_MAP[str];
-    if (tokenIndex) {
-      if (typeof tokenIndex.dict === "number") {
-        pushByte(TAGS.DICTIONARY_0 + tokenIndex.dict);
-      }
+		return true
+	}
 
-      pushByte(tokenIndex.index);
-    } else if (isNibble(str)) {
-      writePackedBytes(str, "nibble");
-    } else if (isHex(str)) {
-      writePackedBytes(str, "hex");
-    } else if (str) {
-      const decodedJid = jidDecode(str);
-      if (decodedJid) {
-        writeJid(decodedJid);
-      } else {
-        writeStringRaw(str);
-      }
-    }
-  };
+	const writeString = (str?: string) => {
+		if (str === undefined || str === null) {
+			pushByte(TAGS.LIST_EMPTY)
+			return
+		}
 
-  const writeListStart = (listSize: number) => {
-    if (listSize === 0) {
-      pushByte(TAGS.LIST_EMPTY);
-    } else if (listSize < 256) {
-      pushBytes([TAGS.LIST_8, listSize]);
-    } else {
-      pushByte(TAGS.LIST_16);
-      pushInt16(listSize);
-    }
-  };
+		const tokenIndex = TOKEN_MAP[str]
+		if (tokenIndex) {
+			if (typeof tokenIndex.dict === 'number') {
+				pushByte(TAGS.DICTIONARY_0 + tokenIndex.dict)
+			}
 
-  const validAttributes = Object.keys(attrs).filter(
-    k => typeof attrs[k] !== "undefined" && attrs[k] !== null
-  );
+			pushByte(tokenIndex.index)
+		} else if (isNibble(str)) {
+			writePackedBytes(str, 'nibble')
+		} else if (isHex(str)) {
+			writePackedBytes(str, 'hex')
+		} else if (str) {
+			const decodedJid = jidDecode(str)
+			if (decodedJid) {
+				writeJid(decodedJid)
+			} else {
+				writeStringRaw(str)
+			}
+		}
+	}
 
-  writeListStart(
-    2 * validAttributes.length + 1 + (typeof content !== "undefined" ? 1 : 0)
-  );
-  writeString(tag);
+	const writeListStart = (listSize: number) => {
+		if (listSize === 0) {
+			pushByte(TAGS.LIST_EMPTY)
+		} else if (listSize < 256) {
+			pushBytes([TAGS.LIST_8, listSize])
+		} else {
+			pushByte(TAGS.LIST_16)
+			pushInt16(listSize)
+		}
+	}
 
-  for (const key of validAttributes) {
-    if (typeof attrs[key] === "string") {
-      writeString(key);
-      writeString(attrs[key]);
-    }
-  }
+	if (!tag) {
+		throw new Error('Invalid node: tag cannot be undefined')
+	}
 
-  if (typeof content === "string") {
-    writeString(content);
-  } else if (Buffer.isBuffer(content) || content instanceof Uint8Array) {
-    writeByteLength(content.length);
-    pushBytes(content);
-  } else if (Array.isArray(content)) {
-    writeListStart(content.length);
-    for (const item of content) {
-      encodeBinaryNodeInner(item, opts, buffer);
-    }
-  } else if (typeof content === "undefined") {
-    // do nothing
-  } else {
-    throw new Error(
-      `invalid children for header "${tag}": ${content} (${typeof content})`
-    );
-  }
+	const validAttributes = Object.keys(attrs || {}).filter(k => typeof attrs[k] !== 'undefined' && attrs[k] !== null)
 
-  return buffer;
-};
+	writeListStart(2 * validAttributes.length + 1 + (typeof content !== 'undefined' ? 1 : 0))
+	writeString(tag)
+
+	for (const key of validAttributes) {
+		if (typeof attrs[key] === 'string') {
+			writeString(key)
+			writeString(attrs[key])
+		}
+	}
+
+	if (typeof content === 'string') {
+		writeString(content)
+	} else if (Buffer.isBuffer(content) || content instanceof Uint8Array) {
+		writeByteLength(content.length)
+		pushBytes(content)
+	} else if (Array.isArray(content)) {
+		const validContent = content.filter(
+			item => item && (item.tag || Buffer.isBuffer(item) || item instanceof Uint8Array || typeof item === 'string')
+		)
+		writeListStart(validContent.length)
+		for (const item of validContent) {
+			encodeBinaryNodeInner(item, opts, buffer)
+		}
+	} else if (typeof content === 'undefined') {
+		// do nothing
+	} else {
+		throw new Error(`invalid children for header "${tag}": ${content} (${typeof content})`)
+	}
+
+	return buffer
+}

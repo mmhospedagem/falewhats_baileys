@@ -1,12 +1,22 @@
-import { DEFAULT_CONNECTION_CONFIG } from "../Defaults";
-import { UserFacingSocketConfig } from "../Types";
-import { makeBusinessSocket as _makeSocket } from "./business";
+import { DEFAULT_CONNECTION_CONFIG } from '../Defaults'
+import type { UserFacingSocketConfig } from '../Types'
+import { makeCommunitiesSocket } from './communities'
 
 // export the last socket layer
-const makeWASocket = (config: UserFacingSocketConfig) =>
-  _makeSocket({
-    ...DEFAULT_CONNECTION_CONFIG,
-    ...config
-  });
+const makeWASocket = (config: UserFacingSocketConfig) => {
+	const newConfig = {
+		...DEFAULT_CONNECTION_CONFIG,
+		...config
+	}
 
-export default makeWASocket;
+	// If the user hasn't provided their own history sync function,
+	// let's create a default one that respects the syncFullHistory flag.
+	// TODO: Change
+	if (config.shouldSyncHistoryMessage === undefined) {
+		newConfig.shouldSyncHistoryMessage = () => !!newConfig.syncFullHistory
+	}
+
+	return makeCommunitiesSocket(newConfig)
+}
+
+export default makeWASocket

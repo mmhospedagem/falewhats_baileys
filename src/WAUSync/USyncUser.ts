@@ -1,18 +1,12 @@
 export class USyncUser {
-	id: string
-	lid: string
-	phone: string
-	type: string
-
-	personaId: string
+	id?: string
+	lid?: string
+	phone?: string
+	type?: string
+	personaId?: string
 
 	withId(id: string) {
 		this.id = id
-		return this
-	}
-
-	withPersonaId(personaId: string) {
-		this.personaId = personaId
 		return this
 	}
 
@@ -31,4 +25,8 @@ export class USyncUser {
 		return this
 	}
 
+	withPersonaId(personaId: string) {
+		this.personaId = personaId
+		return this
+	}
 }

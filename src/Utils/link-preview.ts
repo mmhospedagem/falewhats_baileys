@@ -1,25 +1,28 @@
-import { Logger } from "pino";
-import { WAMediaUploadFunction, WAUrlInfo } from "../Types";
-import { prepareWAMessageMedia } from "./messages";
-import { extractImageThumb, getHttpStream } from "./messages-media";
+import type { WAMediaUploadFunction, WAUrlInfo } from '../Types'
+import type { ILogger } from './logger'
+import { prepareWAMessageMedia } from './messages'
+import { extractImageThumb, getHttpStream } from './messages-media'
 
-const THUMBNAIL_WIDTH_PX = 192;
+const THUMBNAIL_WIDTH_PX = 192
 
 /** Fetches an image and generates a thumbnail for it */
-const getCompressedJpegThumbnail = async (
-  url: string,
-  { thumbnailWidth, timeoutMs }: URLGenerationOptions
-) => {
-  const stream = await getHttpStream(url, { timeout: timeoutMs });
-  const result = await extractImageThumb(stream, thumbnailWidth);
-  return result;
-};
+const getCompressedJpegThumbnail = async (url: string, { thumbnailWidth, fetchOpts }: URLGenerationOptions) => {
+	const stream = await getHttpStream(url, fetchOpts)
+	const result = await extractImageThumb(stream, thumbnailWidth)
+	return result
+}
 
 export type URLGenerationOptions = {
-  thumbnailWidth: number;
-  timeoutMs: number;
-  uploadImage?: WAMediaUploadFunction;
-};
+	thumbnailWidth: number
+	fetchOpts: {
+		/** Timeout in ms */
+		timeout: number
+		proxyUrl?: string
+		headers?: HeadersInit
+	}
+	uploadImage?: WAMediaUploadFunction
+	logger?: ILogger
+}
 
 /**
  * Given a piece of text, checks for any URL present, generates link preview for the same and returns it
@@ -28,59 +31,81 @@ export type URLGenerationOptions = {
  * @returns the URL info required to generate link preview
  */
 export const getUrlInfo = async (
-  text: string,
-  opts: URLGenerationOptions = {
-    thumbnailWidth: THUMBNAIL_WIDTH_PX,
-    timeoutMs: 3000
-  },
-  logger?: Logger
+	text: string,
+	opts: URLGenerationOptions = {
+		thumbnailWidth: THUMBNAIL_WIDTH_PX,
+		fetchOpts: { timeout: 3000 }
+	}
 ): Promise<WAUrlInfo | undefined> => {
-  try {
-    const { getLinkPreview } = await import("link-preview-js");
-    let previewLink = text;
-    if (!text.startsWith("https://") && !text.startsWith("http://")) {
-      previewLink = "https://" + previewLink;
-    }
+	try {
+		// retries
+		const retries = 0
+		const maxRetry = 5
 
-    const info = await getLinkPreview(previewLink, { timeout: opts.timeoutMs });
-    if (info && "title" in info) {
-      const [image] = info.images;
+		const { getLinkPreview } = await import('link-preview-js')
+		let previewLink = text
+		if (!text.startsWith('https://') && !text.startsWith('http://')) {
+			previewLink = 'https://' + previewLink
+		}
 
-      const urlInfo: WAUrlInfo = {
-        "canonical-url": info.url,
-        "matched-text": text,
-        title: info.title,
-        description: info.description,
-        originalThumbnailUrl: image
-      };
+		const info = await getLinkPreview(previewLink, {
+			...opts.fetchOpts,
+			followRedirects: 'follow',
+			handleRedirects: (baseURL: string, forwardedURL: string) => {
+				const urlObj = new URL(baseURL)
+				const forwardedURLObj = new URL(forwardedURL)
+				if (retries >= maxRetry) {
+					return false
+				}
 
-      if (opts.uploadImage) {
-        const { imageMessage } = await prepareWAMessageMedia(
-          { image: { url: image } },
-          { upload: opts.uploadImage, mediaTypeOverride: "thumbnail-link" }
-        );
-        urlInfo.jpegThumbnail = imageMessage?.jpegThumbnail
-          ? Buffer.from(imageMessage.jpegThumbnail)
-          : undefined;
-        urlInfo.highQualityThumbnail = imageMessage || undefined;
-      } else {
-        try {
-          urlInfo.jpegThumbnail = image
-            ? (await getCompressedJpegThumbnail(image, opts)).buffer
-            : undefined;
-        } catch (error) {
-          logger?.debug(
-            { err: error.stack, url: previewLink },
-            "error in generating thumbnail"
-          );
-        }
-      }
+				if (
+					forwardedURLObj.hostname === urlObj.hostname ||
+					forwardedURLObj.hostname === 'www.' + urlObj.hostname ||
+					'www.' + forwardedURLObj.hostname === urlObj.hostname
+				) {
+					retries + 1
+					return true
+				} else {
+					return false
+				}
+			},
+			headers: opts.fetchOpts?.headers as {}
+		})
+		if (info && 'title' in info && info.title) {
+			const [image] = info.images
 
-      return urlInfo;
-    }
-  } catch (error) {
-    if (!error.message.includes("receive a valid")) {
-      throw error;
-    }
-  }
-};
+			const urlInfo: WAUrlInfo = {
+				'canonical-url': info.url,
+				'matched-text': text,
+				title: info.title,
+				description: info.description,
+				originalThumbnailUrl: image
+			}
+
+			if (opts.uploadImage) {
+				const { imageMessage } = await prepareWAMessageMedia(
+					{ image: { url: image! } },
+					{
+						upload: opts.uploadImage,
+						mediaTypeOverride: 'thumbnail-link',
+						options: opts.fetchOpts
+					}
+				)
+				urlInfo.jpegThumbnail = imageMessage?.jpegThumbnail ? Buffer.from(imageMessage.jpegThumbnail) : undefined
+				urlInfo.highQualityThumbnail = imageMessage || undefined
+			} else {
+				try {
+					urlInfo.jpegThumbnail = image ? (await getCompressedJpegThumbnail(image, opts)).buffer : undefined
+				} catch (error: any) {
+					opts.logger?.debug({ err: error.stack, url: previewLink }, 'error in generating thumbnail')
+				}
+			}
+
+			return urlInfo
+		}
+	} catch (error: any) {
+		if (!error.message.includes('receive a valid')) {
+			throw error
+		}
+	}
+}
