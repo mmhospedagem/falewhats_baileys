@@ -265,24 +265,24 @@ export type AnyRegularMessageContent = (
 
 export type AnyMessageContent =
 	| AnyRegularMessageContent
-	| {
+	| 	{
 			forward: WAMessage
 			force?: boolean
-	  }
-	| {
+	  	}
+	| 	{
 			/** Delete your message or anyone's message in a group (admin required) */
 			delete: WAMessageKey
-	  }
-	| {
+	  	}
+	| 	{
 			disappearingMessagesInChat: boolean | number
-	  }
-	| {
+	  	}
+	| 	{
 			limitSharing: boolean
-	  }
+	  	}
 	| 
-	{
-    interactiveMessage: proto.Message.IInteractiveMessage
-}
+		{
+			interactiveMessage: proto.Message.IInteractiveMessage
+		}
 
 export type GroupMetadataParticipants = Pick<GroupMetadata, 'participants'>
 
