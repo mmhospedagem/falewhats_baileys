@@ -501,6 +501,8 @@ export const generateWAMessageContent = async (
 		})
 	} else if ('listReply' in message) {
 		m.listResponseMessage = { ...message.listReply }
+	} else if ("interactiveMessage" in message) {
+		m.interactiveMessage = message.interactiveMessage;
 	} else if ('event' in message) {
 		m.eventMessage = {}
 		const startTime = Math.floor(message.event.startDate.getTime() / 1000)
@@ -1012,3 +1014,28 @@ export const assertMediaContent = (content: proto.IMessage | null | undefined) =
 
 	return mediaContent
 }
+
+/**
+ * this is an experimental patch to make buttons work
+ * Don't know how it works, but it does for now
+ */
+export const patchMessageForMdIfRequired = (message: proto.IMessage) => {
+  const requiresPatch = !!(
+    message.buttonsMessage ||
+    message.listMessage ||
+    message.interactiveMessage
+  );
+
+  if (requiresPatch) {
+    message = {
+      documentWithCaptionMessage: {
+        message: {
+
+          ...message
+        }
+      }
+    };
+  }
+
+  return message;
+};

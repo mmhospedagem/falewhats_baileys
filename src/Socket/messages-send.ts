@@ -923,6 +923,55 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 				logger.debug({ jid }, 'adding device identity')
 			}
 
+			const innerMessage = message.documentWithCaptionMessage?.message || message;
+
+			if (innerMessage.listMessage) {
+				(stanza.content as BinaryNode[]).push({
+					tag: "biz",
+					attrs: {},
+					content: [
+						{
+						tag: "list",
+						attrs: {
+							type: "product_list",
+							v: "2"
+						}
+						}
+					]
+				});
+				logger.debug({ jid }, "adding biz node for list message");
+			} else if (
+				innerMessage.buttonsMessage ||
+				innerMessage.interactiveMessage?.nativeFlowMessage
+			) {
+				(stanza.content as BinaryNode[]).push({
+					tag: "biz",
+					attrs: {},
+					content: [
+						{
+						tag: "interactive",
+						attrs: {
+							type: "native_flow",
+							v: "1"
+						},
+						content: [
+							{
+							tag: "native_flow",
+							attrs: {
+								v: "9",
+								name: "mixed"
+							}
+							}
+						]
+						}
+					]
+				});
+				logger.debug(
+				{ jid },
+				"adding biz node for interactive/buttons message"
+				);
+			}
+
 			if (additionalNodes && additionalNodes.length > 0) {
 				;(stanza.content as BinaryNode[]).push(...additionalNodes)
 			}
