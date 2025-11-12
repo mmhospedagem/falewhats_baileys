@@ -603,7 +603,7 @@ export const generateWAMessageContent = async (
 			}
 
 			Object.assign(buttonsMessage, m)
-			
+
 		}
 
 		if('footer' in message && !!message.footer) {
@@ -646,7 +646,7 @@ export const generateWAMessageContent = async (
 			title: message.title,
 			footerText: message.footer,
 			description: message.text,
-			listType: message.hasOwnProperty('listType') ? message.listType : proto.Message.ListMessage.ListType.PRODUCT_LIST
+			listType: message.hasOwnProperty("listType") ? message.listType : proto.Message.ListMessage.ListType.PRODUCT_LIST
 		}
 
 		m = { listMessage }

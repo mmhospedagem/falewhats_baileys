@@ -84,6 +84,22 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		groupToggleEphemeral
 	} = sock
 
+	const patchMessageRequiresBeforeSending = (msg: proto.IMessage, recipientJids: string[]): proto.IMessage => {
+		if (msg?.deviceSentMessage?.message?.listMessage) {
+			msg = JSON.parse(JSON.stringify(msg))
+
+			msg.deviceSentMessage!.message!.listMessage!.listType = proto.Message.ListMessage.ListType.SINGLE_SELECT
+		}
+
+		if (msg?.listMessage) {
+			msg = JSON.parse(JSON.stringify(msg))
+
+			msg.listMessage!.listType = proto.Message.ListMessage.ListType.SINGLE_SELECT
+		}
+
+		return msg;
+	}
+
 	const userDevicesCache =
 		config.userDevicesCache ||
 		new NodeCache<JidWithDevice[]>({
@@ -490,25 +506,29 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 			return { nodes: [] as BinaryNode[], shouldIncludeDeviceIdentity: false }
 		}
 
-		let patched = await patchMessageBeforeSending(message, recipientJids)
+		const patched = await patchMessageBeforeSending(message, recipientJids)
+
 		const patchedMessages = Array.isArray(patched)
 			? patched
 			: recipientJids.map(jid => ({ recipientJid: jid, message: patched }))
 
-		// Normaliza o retorno para sempre lidar com um único objeto
-		const patchedMsg = Array.isArray(patched) ? patched[0] : patched
+		const patchedMsg: proto.IMessage = Array.isArray(patched) ? message : patched
 
-		// list patch
-		if (patchedMsg?.deviceSentMessage?.message?.listMessage) {
-			const clone = JSON.parse(JSON.stringify(patchedMsg))
-			clone.deviceSentMessage.message.listMessage.listType =
-				proto.Message.ListMessage.ListType.SINGLE_SELECT
-			patched = clone
-		} else if (patchedMsg?.listMessage) {
-			const clone = JSON.parse(JSON.stringify(patchedMsg))
-			clone.listMessage.listType = proto.Message.ListMessage.ListType.SINGLE_SELECT
-			patched = clone
+		// 3) (Opcional) “list patch” sem reatribuir const
+		let messageForRequires = patchedMsg
+		if (messageForRequires?.deviceSentMessage?.message?.listMessage) {
+			const clone = JSON.parse(JSON.stringify(messageForRequires)) as proto.IMessage
+			clone.deviceSentMessage!.message!.listMessage!.listType =
+			proto.Message.ListMessage.ListType.SINGLE_SELECT
+			messageForRequires = clone
+		} else if (messageForRequires?.listMessage) {
+			const clone = JSON.parse(JSON.stringify(messageForRequires)) as proto.IMessage
+			clone.listMessage!.listType = proto.Message.ListMessage.ListType.SINGLE_SELECT
+			messageForRequires = clone
 		}
+
+		// 4) Agora sim: função que espera IMessage recebe IMessage
+		const requiredPatched = patchMessageRequiresBeforeSending(messageForRequires, recipientJids)
 
 		let shouldIncludeDeviceIdentity = false
 		const meId = authState.creds.me!.id
@@ -711,12 +731,16 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 					}
 				}
 
-				const patched = await patchMessageBeforeSending(message)
-				if (Array.isArray(patched)) {
-					throw new Boom('Per-jid patching is not supported in groups')
-				}
+				const jids = devices.map(d => jidEncode(d.user, isLid ? 'lid' : 's.whatsapp.net', d.device))
+				const patched = await patchMessageBeforeSending(message, jids)
+				// Normaliza patched para sempre ser um proto.IMessage
+				const patchedMessage: proto.IMessage = Array.isArray(patched)
+				? message
+				: patched
 
-				const bytes = encodeWAMessage(patched)
+				const requiredPatched = patchMessageRequiresBeforeSending(patchedMessage, jids)
+				const bytes = encodeWAMessage(requiredPatched)
+
 				const groupAddressingMode = additionalAttributes?.['addressing_mode'] || groupData?.addressingMode || 'lid'
 				const groupSenderIdentity = groupAddressingMode === 'lid' && meLid ? meLid : meId
 
