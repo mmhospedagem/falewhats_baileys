@@ -278,7 +278,10 @@ export type AnyMessageContent =
 	  }
 	| {
 			limitSharing: boolean
-	  }
+	  } 
+	| {
+    	interactiveMessage: proto.Message.IInteractiveMessage
+	}
 
 export type GroupMetadataParticipants = Pick<GroupMetadata, 'participants'>
 

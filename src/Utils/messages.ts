@@ -576,6 +576,8 @@ export const generateWAMessageContent = async (
 				initiatedByMe: true
 			}
 		}
+	} else if('interactiveMessage' in message) {
+		m.interactiveMessage = message.interactiveMessage
 	} else {
 		m = await prepareWAMessageMedia(message, options)
 	}
