@@ -646,7 +646,7 @@ export const generateWAMessageContent = async (
 			title: message.title,
 			footerText: message.footer,
 			description: message.text,
-			listType: message.hasOwnProperty("listType") ? message.listType : proto.Message.ListMessage.ListType.PRODUCT_LIST
+			listType: message.hasOwnProperty("listType") ? message.listType : proto.Message.ListMessage.ListType.SINGLE_SELECT
 		}
 
 		m = { listMessage }
