@@ -964,16 +964,8 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 	}
 
 	const getMessageType = (message: proto.IMessage) => {
-		if (message.pollCreationMessage || message.pollCreationMessageV2 || message.pollCreationMessageV3) {
+		if(message.pollCreationMessage || message.pollCreationMessageV2 || message.pollCreationMessageV3) {
 			return 'poll'
-		}
-
-		if (message.eventMessage) {
-			return 'event'
-		}
-
-		if (getMediaType(message) !== '') {
-			return 'media'
 		}
 
 		return 'text'
