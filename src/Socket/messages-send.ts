@@ -10,7 +10,8 @@ import type {
 	MiscMessageGenerationOptions,
 	SocketConfig,
 	WAMessage,
-	WAMessageKey
+	WAMessageKey,
+	PatchedMessageWithRecipientJID 
 } from '../Types'
 import {
 	aggregateMessageKeysNotFromMe,
@@ -489,10 +490,25 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 			return { nodes: [] as BinaryNode[], shouldIncludeDeviceIdentity: false }
 		}
 
-		const patched = await patchMessageBeforeSending(message, recipientJids)
+		let patched = await patchMessageBeforeSending(message, recipientJids)
 		const patchedMessages = Array.isArray(patched)
 			? patched
 			: recipientJids.map(jid => ({ recipientJid: jid, message: patched }))
+
+		// Normaliza o retorno para sempre lidar com um único objeto
+		const patchedMsg = Array.isArray(patched) ? patched[0] : patched
+
+		// list patch
+		if (patchedMsg?.deviceSentMessage?.message?.listMessage) {
+			const clone = JSON.parse(JSON.stringify(patchedMsg))
+			clone.deviceSentMessage.message.listMessage.listType =
+				proto.Message.ListMessage.ListType.SINGLE_SELECT
+			patched = clone
+		} else if (patchedMsg?.listMessage) {
+			const clone = JSON.parse(JSON.stringify(patchedMsg))
+			clone.listMessage.listType = proto.Message.ListMessage.ListType.SINGLE_SELECT
+			patched = clone
+		}
 
 		let shouldIncludeDeviceIdentity = false
 		const meId = authState.creds.me!.id
