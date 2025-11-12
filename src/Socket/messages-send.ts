@@ -940,7 +940,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 						{
 							tag: buttonType,
 							attrs: getButtonArgs(message),
-							
+							...(buttonType !== 'list' && { content: getButtonContent(message) })
 						}
 					]
 				})
@@ -948,14 +948,16 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 				logger.debug({ jid }, 'adding business node')
 			}
 
+
+			// end of buttons add
+
+			// if(additionalNodes && additionalNodes.length > 0) {
+			// 	(stanza.content as BinaryNode[]).push(...additionalNodes)
+			// }
+
 			logger.debug({ msgId }, `sending message to ${participants.length} devices`)
 
 			await sendNode(stanza)
-
-			// Add message to retry cache if enabled
-			if (messageRetryManager && !participant) {
-				messageRetryManager.addRecentMessage(destinationJid, msgId, message)
-			}
 		}, meId)
 
 		return msgId
