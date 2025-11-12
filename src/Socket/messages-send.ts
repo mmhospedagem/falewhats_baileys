@@ -940,7 +940,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 						{
 							tag: buttonType,
 							attrs: getButtonArgs(message),
-							...(buttonType !== 'list' && { content: getButtonContent(message) })
+							
 						}
 					]
 				})
