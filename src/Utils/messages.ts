@@ -596,10 +596,14 @@ export const generateWAMessageContent = async (
 				buttonsMessage.contentText = message.caption
 			}
 
-			const type = Object.keys(m)[0].replace('Message', '').toUpperCase()
-			buttonsMessage.headerType = ButtonType[type]
+			const type = Object.keys(m ?? {})[0]?.replace('Message', '').toUpperCase() || ''
+
+			if (type && ButtonType[type as keyof typeof ButtonType]) {
+				buttonsMessage.headerType = ButtonType[type as keyof typeof ButtonType]
+			}
 
 			Object.assign(buttonsMessage, m)
+			
 		}
 
 		if('footer' in message && !!message.footer) {
