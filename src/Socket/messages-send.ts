@@ -1074,11 +1074,9 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 			return { v: '2', type: ListType[type].toLowerCase() }
 		} else if(message.interactiveMessage) {
             const buttons = message.interactiveMessage.nativeFlowMessage?.buttons || [];
-            const hasPaymentButton = buttons.some(
-				button => ["payment_info", "review_and_pay"].includes(button.name as string)
-			);
+            const hasPaymentInfoButton = buttons.some(button => button.name === "payment_info");
             
-            if (hasPaymentButton) {
+            if (hasPaymentInfoButton) {
                 return {
                     v: "1",
                     type: "native_flow"
@@ -1103,15 +1101,13 @@ export const makeMessagesSocket = (config: SocketConfig) => {
         }
         else if (message.interactiveMessage) {
             const buttons = message.interactiveMessage.nativeFlowMessage?.buttons || [];
-            const nativeButton = buttons.find(button =>
-				["payment_info", "review_and_pay"].includes(button.name as string)
-			);
-
-            if (nativeButton) {
+            const hasPaymentInfoButton = buttons.some(button => button.name === "payment_info");
+            
+            if (hasPaymentInfoButton) {
                 return [{
                     tag: "native_flow",
                     attrs: {
-                        name: nativeButton.name ?? ""
+                        name: "payment_info"
                     }
                 }];
             } else {
