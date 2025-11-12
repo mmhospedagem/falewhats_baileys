@@ -980,41 +980,37 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 	}
 
 	const getMediaType = (message: proto.IMessage) => {
-		if (message.imageMessage) {
+		if(message.imageMessage) {
 			return 'image'
-		} else if (message.videoMessage) {
+		} else if(message.videoMessage) {
 			return message.videoMessage.gifPlayback ? 'gif' : 'video'
-		} else if (message.audioMessage) {
+		} else if(message.audioMessage) {
 			return message.audioMessage.ptt ? 'ptt' : 'audio'
-		} else if (message.contactMessage) {
+		} else if(message.contactMessage) {
 			return 'vcard'
-		} else if (message.documentMessage) {
+		} else if(message.documentMessage) {
 			return 'document'
-		} else if (message.contactsArrayMessage) {
+		} else if(message.contactsArrayMessage) {
 			return 'contact_array'
-		} else if (message.liveLocationMessage) {
+		} else if(message.liveLocationMessage) {
 			return 'livelocation'
-		} else if (message.stickerMessage) {
+		} else if(message.stickerMessage) {
 			return 'sticker'
-		} else if (message.listMessage) {
+		} else if(message.listMessage) {
 			return 'list'
-		} else if (message.listResponseMessage) {
+		} else if(message.listResponseMessage) {
 			return 'list_response'
-		} else if (message.buttonsResponseMessage) {
+		} else if(message.buttonsResponseMessage) {
 			return 'buttons_response'
-		} else if (message.orderMessage) {
+		} else if(message.orderMessage) {
 			return 'order'
-		} else if (message.productMessage) {
+		} else if(message.productMessage) {
 			return 'product'
-		} else if(message.interactiveMessage) {
-			return 'interactive'
-		} else if (message.interactiveResponseMessage) {
+		} else if(message.interactiveResponseMessage) {
 			return 'native_flow_response'
-		} else if (message.groupInviteMessage) {
+		} else if(message.groupInviteMessage) {
 			return 'url'
 		}
-
-		return ''
 	}
 
 	const getButtonType = (message: proto.IMessage) => {
