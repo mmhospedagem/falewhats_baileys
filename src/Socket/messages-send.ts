@@ -1075,7 +1075,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		} else if(message.interactiveMessage) {
             const buttons = message.interactiveMessage.nativeFlowMessage?.buttons || [];
             const hasPaymentButton = buttons.some(
-				button => ["payment_info", "review_and_pay"].includes(button.name!)
+				button => ["payment_info", "review_and_pay"].includes(button.name as string)
 			);
             
             if (hasPaymentButton) {
@@ -1104,14 +1104,14 @@ export const makeMessagesSocket = (config: SocketConfig) => {
         else if (message.interactiveMessage) {
             const buttons = message.interactiveMessage.nativeFlowMessage?.buttons || [];
             const nativeButton = buttons.find(button =>
-				["payment_info", "review_and_pay"].includes(button.name!)
+				["payment_info", "review_and_pay"].includes(button.name as string)
 			);
 
             if (nativeButton) {
                 return [{
                     tag: "native_flow",
                     attrs: {
-                        name: nativeButton.name?
+                        name: nativeButton.name as string
                     }
                 }];
             } else {
