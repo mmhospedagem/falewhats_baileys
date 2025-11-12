@@ -56,6 +56,8 @@ import {
 import { USyncQuery, USyncUser } from '../WAUSync'
 import { makeNewsletterSocket } from './newsletter'
 
+import ListType = proto.Message.ListMessage.ListType;
+
 export const makeMessagesSocket = (config: SocketConfig) => {
 	const {
 		logger,
@@ -927,6 +929,25 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 				;(stanza.content as BinaryNode[]).push(...additionalNodes)
 			}
 
+			// add buttons here
+
+			const buttonType = getButtonType(message)
+			if(buttonType) {
+				(stanza.content as BinaryNode[]).push({
+					tag: 'biz',
+					attrs: { },
+					content: [
+						{
+							tag: buttonType,
+							attrs: getButtonArgs(message),
+							...(buttonType !== 'list' && { content: getButtonContent(message) })
+						}
+					]
+				})
+
+				logger.debug({ jid }, 'adding business node')
+			}
+
 			logger.debug({ msgId }, `sending message to ${participants.length} devices`)
 
 			await sendNode(stanza)
@@ -983,6 +1004,8 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 			return 'order'
 		} else if (message.productMessage) {
 			return 'product'
+		} else if(message.interactiveMessage) {
+			return 'interactive'
 		} else if (message.interactiveResponseMessage) {
 			return 'native_flow_response'
 		} else if (message.groupInviteMessage) {
@@ -991,6 +1014,87 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 
 		return ''
 	}
+
+	const getButtonType = (message: proto.IMessage) => {
+		if(message.buttonsMessage) {
+			return 'buttons'
+		} else if(message.buttonsResponseMessage) {
+			return 'buttons_response'
+		} else if(message.interactiveResponseMessage) {
+			return 'interactive_response'
+		} else if(message.listMessage) {
+			return 'list'
+		} else if(message.listResponseMessage) {
+			return 'list_response'
+		} else if(message.interactiveMessage) {
+			return 'interactive'
+		}
+	}
+
+	const getButtonArgs = (message: proto.IMessage): BinaryNode['attrs'] => {
+		if(message.templateMessage) {
+			// TODO: Add attributes
+			return {}
+		} else if(message.listMessage) {
+			const type = message.listMessage.listType
+			if(!type) {
+				throw new Boom('Expected list type inside message')
+			}
+
+			return { v: '2', type: ListType[type].toLowerCase() }
+		} else if(message.interactiveMessage) {
+            const buttons = message.interactiveMessage.nativeFlowMessage?.buttons || [];
+            const hasPaymentInfoButton = buttons.some(button => button.name === "payment_info");
+            
+            if (hasPaymentInfoButton) {
+                return {
+                    v: "1",
+                    type: "native_flow"
+                };
+            }
+            
+            return {
+                type: "native_flow"
+            };
+        } 
+		else {
+			return {}
+		}
+	}
+
+	const getButtonContent = (message: proto.IMessage):  BinaryNode['content'] => {
+        if (!message) return []
+
+        if (message.templateMessage) {
+            // TODO: Add attributes
+            return [];
+        }
+        else if (message.interactiveMessage) {
+            const buttons = message.interactiveMessage.nativeFlowMessage?.buttons || [];
+            const hasPaymentInfoButton = buttons.some(button => button.name === "payment_info");
+            
+            if (hasPaymentInfoButton) {
+                return [{
+                    tag: "native_flow",
+                    attrs: {
+                        name: "payment_info"
+                    }
+                }];
+            } else {
+                return [{
+                    tag: "native_flow",
+                    attrs: {
+                        v: "2",
+                        name: "mixed"
+                    }
+                }];
+            }
+        }
+        else {
+            return [];
+        }
+    };
+
 
 	const getPrivacyTokens = async (jids: string[]) => {
 		const t = unixTimestampSeconds().toString()
