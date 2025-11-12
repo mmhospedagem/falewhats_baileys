@@ -1111,7 +1111,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
                 return [{
                     tag: "native_flow",
                     attrs: {
-                        name: "payment_info"
+                        name: nativeButton.name!
                     }
                 }];
             } else {
