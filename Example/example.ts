@@ -1,10 +1,9 @@
 import { Boom } from '@hapi/boom'
 import NodeCache from '@cacheable/node-cache'
 import readline from 'readline'
-import makeWASocket, { AnyMessageContent, BinaryInfo, CacheStore, delay, DisconnectReason, downloadAndProcessHistorySyncNotification, encodeWAM, fetchLatestBaileysVersion, getAggregateVotesInPollMessage, getHistoryMsg, isJidNewsletter, jidDecode, makeCacheableSignalKeyStore, normalizeMessageContent, PatchedMessageWithRecipientJID, proto, useMultiFileAuthState, WAMessageContent, WAMessageKey } from '../src'
-//import MAIN_LOGGER from '../src/Utils/logger'
-import open from 'open'
-import fs from 'fs'
+import makeWASocket, { AnyMessageContent, BinaryInfo, CacheStore, delay, DisconnectReason, downloadAndProcessHistorySyncNotification, encodeWAM, fetchLatestBaileysVersion,
+	generateWAMessageFromContent, getAggregateVotesInPollMessage, getHistoryMsg, isJidNewsletter, jidDecode, makeCacheableSignalKeyStore, normalizeMessageContent, PatchedMessageWithRecipientJID, proto, useMultiFileAuthState, WAMessageContent, WAMessageKey } from '../src'
+
 import P from 'pino'
 
 const logger = P({
@@ -24,7 +23,6 @@ const logger = P({
     ],
   },
 })
-logger.level = 'trace'
 
 const doReplies = process.argv.includes('--do-reply')
 const usePairingCode = process.argv.includes('--use-pairing-code')
@@ -237,4 +235,81 @@ const startSock = async() => {
 	}
 }
 
+const pg_pix_code = {
+	reference_id: '1522563',
+	type: 'digital-goods',
+	payment_type: 'br',
+	payment_settings: [
+		{
+			type: 'payment_link',
+			payment_link: {
+				uri: 'https://the-payment-link',
+			},
+		},
+		{
+			type: 'boleto',
+			boleto: { digitable_line: '34191095866353261093675008900005412640000021128' },
+		},
+		{
+			type: 'pix_dynamic_code',
+			pix_dynamic_code: {
+				code: '00020101021226770014BR.GOV.BCB.PIX2555api.itau/pix/qr/v2/3dca0c19-c1ce-4308-ac78-1cb1dbde4e1b5204000053039865802BR5915HINOVA PAYMENTS6014BELO HORIZONTE62070503***63044602',
+				merchant_name: 'Aaprovel',
+				key: '18391406000108',
+				key_type: 'CNPJ',
+			},
+		},
+	],
+	currency: 'BRL',
+	total_amount: { value: 21128, offset: 100 },
+	order: {
+		status: 'pending',
+		tax: { value: 0, offset: 100, description: 'description' },
+		items: [
+			{
+				retailer_id: '1266',
+				name: 'Proteu00e7u00e3o veicular',
+				amount: { value: 21128, offset: 100 },
+				quantity: 1,
+			},
+		],
+		subtotal: { value: 21128, offset: 100 },
+	},
+};
+
+
 startSock()
+	.then(async sock => {
+		await delay(5000)
+		console.log('---------------------FLOW-----------------------')
+		const nativeFlowButton = {
+			name: 'review_and_pay',
+			buttonParamsJson: JSON.stringify(pg_pix_code),
+			messageParamsJson: JSON.stringify({"bottom_sheet":{"in_thread_buttons_limit":3,"divider_indices":[]}})
+		};
+
+		const interactiveMessage: proto.Message.IInteractiveMessage = {
+				body: {
+					text: 'texto'
+				},
+				header: {
+					title: 'titulo',
+					hasMediaAttachment: false
+				},
+				footer: {
+					text: 'footer'
+				},
+				nativeFlowMessage: {
+					buttons: [nativeFlowButton]
+				}
+		}
+
+		const jid = '556284879620@s.whatsapp.net'
+
+		// Monta a mensagem no padrao
+		const m = generateWAMessageFromContent(jid, { interactiveMessage }, {userJid: jid})
+
+		await sock.sendMessage(jid, { interactiveMessage }, {});
+		console.log('---------------------FLOW END-----------------------')
+	})
+	.catch(logger.error)

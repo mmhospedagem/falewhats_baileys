@@ -11,7 +11,7 @@ import type {
 	SocketConfig,
 	WAMessage,
 	WAMessageKey,
-	PatchedMessageWithRecipientJID 
+	GroupMetadata
 } from '../Types'
 import {
 	aggregateMessageKeysNotFromMe,
@@ -26,6 +26,7 @@ import {
 	generateMessageIDV2,
 	generateParticipantHashV2,
 	generateWAMessage,
+	getContentType,
 	getStatusCodeForMediaRetry,
 	getUrlFromDirectPath,
 	getWAUploadToServer,
@@ -59,6 +60,13 @@ import { makeNewsletterSocket } from './newsletter'
 
 import ListType = proto.Message.ListMessage.ListType;
 
+const nativeFlowSpecials = [
+	'mpm', 'cta_catalog', 'send_location',
+	'call_permission_request', 'wa_payment_transaction_details',
+	'automated_greeting_message_view_catalog', 'payment_info', 'review_and_pay'
+]
+
+
 export const makeMessagesSocket = (config: SocketConfig) => {
 	const {
 		logger,
@@ -81,10 +89,11 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		fetchPrivacySettings,
 		sendNode,
 		groupMetadata,
-		groupToggleEphemeral
+		groupToggleEphemeral,
+		groupMetadataWithRetry,
 	} = sock
 
-	const patchMessageRequiresBeforeSending = (msg: proto.IMessage, recipientJids: string[]): proto.IMessage => {
+	const patchMessageRequiresBeforeSending = (msg: proto.IMessage, recipientJids?: string[]): proto.IMessage => {
 		if (msg?.deviceSentMessage?.message?.listMessage) {
 			msg = JSON.parse(JSON.stringify(msg))
 
@@ -586,7 +595,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		return { nodes, shouldIncludeDeviceIdentity }
 	}
 
-	const relayMessage = async (
+	const relayMessage = async(
 		jid: string,
 		message: proto.IMessage,
 		{
@@ -599,10 +608,10 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 			statusJidList
 		}: MessageRelayOptions
 	) => {
-		const meId = authState.creds.me!.id
+		const meId: string = authState.creds.me!.id
 		const meLid = authState.creds.me?.lid
 		const isRetryResend = Boolean(participant?.jid)
-		let shouldIncludeDeviceIdentity = isRetryResend
+		let shouldIncludeDeviceIdentity: boolean = isRetryResend
 		const statusJid = 'status@broadcast'
 
 		const { user, server } = jidDecode(jid)!
@@ -631,7 +640,10 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 
 		const extraAttrs: BinaryNodeAttributes = {}
 
-		if (participant) {
+		const normalizedMessage: proto.IMessage | undefined = normalizeMessageContent(message)
+		const isInteractiveMessage: boolean = getContentType(normalizedMessage) === 'interactiveMessage'
+
+		if (participant && !isInteractiveMessage) {
 			if (!isGroup && !isStatus) {
 				additionalAttributes = { ...additionalAttributes, device_fanout: 'false' }
 			}
@@ -644,361 +656,427 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 			})
 		}
 
-		await authState.keys.transaction(async () => {
-			const mediaType = getMediaType(message)
-			if (mediaType) {
-				extraAttrs['mediatype'] = mediaType
-			}
+		if (isInteractiveMessage) {
+			additionalAttributes = { ...additionalAttributes, 'device_fanout': 'false' }
+		}
 
-			if (isNewsletter) {
-				const patched = patchMessageBeforeSending ? await patchMessageBeforeSending(message, []) : message
-				const bytes = encodeNewsletterMessage(patched as proto.IMessage)
-				binaryNodeContent.push({
-					tag: 'plaintext',
-					attrs: {},
-					content: bytes
-				})
+		await authState.keys.transaction(
+			async() => {
+				const mediaType = getMediaType(message)
+				if (mediaType) {
+					extraAttrs['mediatype'] = mediaType
+				}
+
+				if (isNewsletter) {
+					const patched = patchMessageBeforeSending ? await patchMessageBeforeSending(message, []) : message
+					const bytes = encodeNewsletterMessage(patched as proto.IMessage)
+					binaryNodeContent.push({
+						tag: 'plaintext',
+						attrs: {},
+						content: bytes
+					})
+					const stanza: BinaryNode = {
+						tag: 'message',
+						attrs: {
+							to: jid,
+							id: msgId,
+							type: getMessageType(message),
+							...(additionalAttributes || {})
+						},
+						content: binaryNodeContent
+					}
+					logger.debug({ msgId }, `sending newsletter message to ${jid}`)
+					await sendNode(stanza)
+					return
+				}
+
+				if (normalizeMessageContent(message)?.pinInChatMessage) {
+					extraAttrs['decrypt-fail'] = 'hide' // TODO: expand for reactions and other types
+				}
+
+				if (isGroup || isStatus) {
+					const [groupData, senderKeyMap] = await Promise.all([
+						(async() => {
+							let groupData: GroupMetadata | undefined = useCachedGroupMetadata && cachedGroupMetadata ? await cachedGroupMetadata(jid) : undefined // TODO: should we rely on the cache specially if the cache is outdated and the metadata has new fields?
+							if (groupData && Array.isArray(groupData?.participants)) {
+								logger.trace({ jid, participants: groupData.participants.length }, 'using cached group metadata')
+							} else if (!isStatus) {
+								try {
+									groupData = await groupMetadataWithRetry(jid, 3, 300_000)
+								} catch (error) {
+									logger.warn({ jid, error }, 'failed to get group metadata with retry, falling back to regular call')
+									groupData = await groupMetadata(jid)
+								}
+							}
+
+							return groupData
+						})(),
+						(async() => {
+							if (!participant && !isStatus) {
+								const result = await authState.keys.get('sender-key-memory', [jid]) // TODO: check out what if the sender key memory doesn't include the LID stuff now?
+								return result[jid] || { }
+							}
+
+							return { }
+						})()
+					])
+
+					if (!participant) {
+						const participantsList = []
+						if (isStatus) {
+							if (statusJidList?.length) participantsList.push(...statusJidList)
+						} else {
+							// default to LID based groups
+							let groupAddressingMode = 'lid'
+							if (groupData) {
+								participantsList.push(...groupData.participants.map(p => p.id))
+								groupAddressingMode = groupData?.addressingMode || groupAddressingMode
+							}
+
+							// default to lid addressing mode in a group
+							additionalAttributes = {
+								...additionalAttributes,
+								addressing_mode: groupAddressingMode
+							}
+						}
+
+						const additionalDevices = await getUSyncDevices(participantsList, !!useUserDevicesCache, false)
+						devices.push(...additionalDevices)
+					}
+
+					if (groupData?.ephemeralDuration && groupData.ephemeralDuration > 0) {
+						additionalAttributes = {
+							...additionalAttributes,
+							expiration: groupData.ephemeralDuration.toString()
+						}
+					}
+
+					const patched = await patchMessageBeforeSending(message, devices.map(d => jidEncode(d.user, isLid ? 'lid' : 's.whatsapp.net', d.device))) as proto.IMessage
+					if (Array.isArray(patched)) {
+						throw new Boom('Per-jid patching is not supported in groups')
+					}
+
+					const requiredPatched: proto.IMessage = patchMessageRequiresBeforeSending(patched)
+
+					const bytes: Buffer = encodeWAMessage(requiredPatched)
+					const groupAddressingMode = additionalAttributes?.['addressing_mode'] || groupData?.addressingMode || 'lid'
+					const groupSenderIdentity = groupAddressingMode === 'lid' && meLid ? meLid : meId
+
+					const { ciphertext, senderKeyDistributionMessage } = await signalRepository.encryptGroupMessage({
+						group: destinationJid,
+						data: bytes,
+						meId: groupSenderIdentity
+					})
+
+					const senderKeyRecipients: string[] = []
+					for (const device of devices) {
+						const deviceJid = device.jid
+						const hasKey = !!senderKeyMap[deviceJid]
+						if (
+							(!hasKey || !!participant) &&
+							!isHostedLidUser(deviceJid) &&
+							!isHostedPnUser(deviceJid) &&
+							device.device !== 99
+						) {
+							//todo: revamp all this logic
+							// the goal is to follow with what I said above for each group, and instead of a true false map of ids, we can set an array full of those the app has already sent pkmsgs
+							senderKeyRecipients.push(deviceJid)
+							senderKeyMap[deviceJid] = true
+						}
+					}
+
+					if (senderKeyRecipients.length) {
+						logger.debug({ senderKeyJids: senderKeyRecipients }, 'sending new sender key')
+
+						const senderKeyMsg: proto.IMessage = {
+							senderKeyDistributionMessage: {
+								axolotlSenderKeyDistributionMessage: senderKeyDistributionMessage,
+								groupId: destinationJid
+							}
+						}
+
+						const senderKeySessionTargets = senderKeyRecipients
+						await assertSessions(senderKeySessionTargets)
+
+						const result = await createParticipantNodes(senderKeyRecipients, senderKeyMsg, extraAttrs)
+						shouldIncludeDeviceIdentity = shouldIncludeDeviceIdentity || result.shouldIncludeDeviceIdentity
+
+						participants.push(...result.nodes)
+					}
+
+					if (isRetryResend) {
+						const { type, ciphertext: encryptedContent } = await signalRepository.encryptMessage({
+							data: bytes,
+							jid: participant?.jid!
+						})
+
+						binaryNodeContent.push({
+							tag: 'enc',
+							attrs: {
+								v: '2',
+								type,
+								count: participant!.count.toString()
+							},
+							content: encryptedContent
+						})
+					} else {
+						binaryNodeContent.push({
+							tag: 'enc',
+							attrs: { v: '2', type: 'skmsg', ...extraAttrs },
+							content: ciphertext
+						})
+
+						await authState.keys.set({ 'sender-key-memory': { [jid]: senderKeyMap } })
+					}
+				} else {
+					let ownId = meId
+					if (isLid && meLid) {
+						ownId = meLid
+						logger.debug({ to: jid, ownId }, 'Using LID identity for @lid conversation')
+					} else {
+						logger.debug({ to: jid, ownId }, 'Using PN identity for @s.whatsapp.net conversation')
+					}
+
+					const { user: ownUser } = jidDecode(ownId)!
+
+					if (!participant) {
+						const targetUserServer = isLid ? 'lid' : 's.whatsapp.net'
+						devices.push({
+							user,
+							device: 0,
+							jid: jidEncode(user, targetUserServer, 0) // rajeh, todo: this entire logic is convoluted and weird.
+						})
+
+						if (user !== ownUser) {
+							const ownUserServer = isLid ? 'lid' : 's.whatsapp.net'
+							const ownUserForAddressing = isLid && meLid ? jidDecode(meLid)!.user : jidDecode(meId)!.user
+
+							devices.push({
+								user: ownUserForAddressing,
+								device: 0,
+								jid: jidEncode(ownUserForAddressing, ownUserServer, 0)
+							})
+						}
+
+						if (additionalAttributes?.['category'] !== 'peer') {
+							// Clear placeholders and enumerate actual devices
+							devices.length = 0
+
+							// Use conversation-appropriate sender identity
+							const senderIdentity =
+								isLid && meLid
+									? jidEncode(jidDecode(meLid)?.user!, 'lid', undefined)
+									: jidEncode(jidDecode(meId)?.user!, 's.whatsapp.net', undefined)
+
+							// Enumerate devices for sender and target with consistent addressing
+							const sessionDevices = await getUSyncDevices([senderIdentity, jid], true, false)
+							devices.push(...sessionDevices)
+
+							logger.debug(
+								{
+									deviceCount: devices.length,
+									devices: devices.map(d => `${d.user}:${d.device}@${jidDecode(d.jid)?.server}`)
+								},
+								'Device enumeration complete with unified addressing'
+							)
+						}
+					}
+
+					const allRecipients: string[] = []
+					const meRecipients: string[] = []
+					const otherRecipients: string[] = []
+					const { user: mePnUser } = jidDecode(meId)!
+					const { user: meLidUser } = meLid ? jidDecode(meLid)! : { user: null }
+
+					for (const { user, jid } of devices) {
+						const isExactSenderDevice = jid === meId || (meLid && jid === meLid)
+						if (isExactSenderDevice) {
+							logger.debug({ jid, meId, meLid }, 'Skipping exact sender device (whatsmeow pattern)')
+							continue
+						}
+
+						// Check if this is our device (could match either PN or LID user)
+						const isMe = user === mePnUser || user === meLidUser
+
+						if (isMe) {
+							meRecipients.push(jid)
+						} else {
+							otherRecipients.push(jid)
+						}
+
+						allRecipients.push(jid)
+					}
+
+					await assertSessions(allRecipients)
+
+					const [
+						{ nodes: meNodes, shouldIncludeDeviceIdentity: s1 },
+						{ nodes: otherNodes, shouldIncludeDeviceIdentity: s2 }
+					] = await Promise.all([
+						// For own devices: use DSM if available (1:1 chats only)
+						createParticipantNodes(meRecipients, meMsg || message, extraAttrs),
+						createParticipantNodes(otherRecipients, message, extraAttrs, meMsg)
+					])
+					participants.push(...meNodes)
+					participants.push(...otherNodes)
+
+					if (meRecipients.length > 0 || otherRecipients.length > 0) {
+						extraAttrs['phash'] = generateParticipantHashV2([...meRecipients, ...otherRecipients])
+					}
+
+					shouldIncludeDeviceIdentity = shouldIncludeDeviceIdentity || s1 || s2
+				}
+
+				if (participants.length) {
+					if (additionalAttributes?.['category'] === 'peer') {
+						const peerNode = participants[0]?.content?.[0] as BinaryNode
+						if (peerNode) {
+							binaryNodeContent.push(peerNode)
+						}
+					} else {
+						binaryNodeContent.push({
+							tag: 'participants',
+							attrs: { },
+							content: participants
+						})
+					}
+				} else {
+					logger.warn({ jid, msgId, isGroup, isStatus }, 'no participants to send message, message may not be delivered')
+				}
+
 				const stanza: BinaryNode = {
 					tag: 'message',
 					attrs: {
-						to: jid,
 						id: msgId,
 						type: getMessageType(message),
 						...(additionalAttributes || {})
 					},
 					content: binaryNodeContent
 				}
-				logger.debug({ msgId }, `sending newsletter message to ${jid}`)
-				await sendNode(stanza)
-				return
-			}
 
-			if (normalizeMessageContent(message)?.pinInChatMessage) {
-				extraAttrs['decrypt-fail'] = 'hide' // todo: expand for reactions and other types
-			}
-
-			if (isGroup || isStatus) {
-				const [groupData, senderKeyMap] = await Promise.all([
-					(async () => {
-						let groupData = useCachedGroupMetadata && cachedGroupMetadata ? await cachedGroupMetadata(jid) : undefined // todo: should we rely on the cache specially if the cache is outdated and the metadata has new fields?
-						if (groupData && Array.isArray(groupData?.participants)) {
-							logger.trace({ jid, participants: groupData.participants.length }, 'using cached group metadata')
-						} else if (!isStatus) {
-							groupData = await groupMetadata(jid) // TODO: start storing group participant list + addr mode in Signal & stop relying on this
-						}
-
-						return groupData
-					})(),
-					(async () => {
-						if (!participant && !isStatus) {
-							// what if sender memory is less accurate than the cached metadata
-							// on participant change in group, we should do sender memory manipulation
-							const result = await authState.keys.get('sender-key-memory', [jid]) // TODO: check out what if the sender key memory doesn't include the LID stuff now?
-							return result[jid] || {}
-						}
-
-						return {}
-					})()
-				])
-
-				if (!participant) {
-					const participantsList = []
-					if (isStatus) {
-						if (statusJidList?.length) participantsList.push(...statusJidList)
+				if (participant) {
+					if (isJidGroup(destinationJid)) {
+						stanza.attrs.to = destinationJid
+						stanza.attrs.participant = participant.jid
+					} else if (areJidsSameUser(participant.jid, meId)) {
+						stanza.attrs.to = participant.jid
+						stanza.attrs.recipient = destinationJid
 					} else {
-						// default to LID based groups
-						let groupAddressingMode = 'lid'
-						if (groupData) {
-							participantsList.push(...groupData.participants.map(p => p.id))
-							groupAddressingMode = groupData?.addressingMode || groupAddressingMode
-						}
-
-						// default to lid addressing mode in a group
-						additionalAttributes = {
-							...additionalAttributes,
-							addressing_mode: groupAddressingMode
-						}
-					}
-
-					const additionalDevices = await getUSyncDevices(participantsList, !!useUserDevicesCache, false)
-					devices.push(...additionalDevices)
-				}
-
-				if (groupData?.ephemeralDuration && groupData.ephemeralDuration > 0) {
-					additionalAttributes = {
-						...additionalAttributes,
-						expiration: groupData.ephemeralDuration.toString()
-					}
-				}
-
-				const jids = devices.map(d => jidEncode(d.user, isLid ? 'lid' : 's.whatsapp.net', d.device))
-				const patched = await patchMessageBeforeSending(message, jids)
-				// Normaliza patched para sempre ser um proto.IMessage
-				const patchedMessage: proto.IMessage = Array.isArray(patched)
-				? message
-				: patched
-
-				const requiredPatched = patchMessageRequiresBeforeSending(patchedMessage, jids)
-				const bytes = encodeWAMessage(requiredPatched)
-
-				const groupAddressingMode = additionalAttributes?.['addressing_mode'] || groupData?.addressingMode || 'lid'
-				const groupSenderIdentity = groupAddressingMode === 'lid' && meLid ? meLid : meId
-
-				const { ciphertext, senderKeyDistributionMessage } = await signalRepository.encryptGroupMessage({
-					group: destinationJid,
-					data: bytes,
-					meId: groupSenderIdentity
-				})
-
-				const senderKeyRecipients: string[] = []
-				for (const device of devices) {
-					const deviceJid = device.jid
-					const hasKey = !!senderKeyMap[deviceJid]
-					if (
-						(!hasKey || !!participant) &&
-						!isHostedLidUser(deviceJid) &&
-						!isHostedPnUser(deviceJid) &&
-						device.device !== 99
-					) {
-						//todo: revamp all this logic
-						// the goal is to follow with what I said above for each group, and instead of a true false map of ids, we can set an array full of those the app has already sent pkmsgs
-						senderKeyRecipients.push(deviceJid)
-						senderKeyMap[deviceJid] = true
-					}
-				}
-
-				if (senderKeyRecipients.length) {
-					logger.debug({ senderKeyJids: senderKeyRecipients }, 'sending new sender key')
-
-					const senderKeyMsg: proto.IMessage = {
-						senderKeyDistributionMessage: {
-							axolotlSenderKeyDistributionMessage: senderKeyDistributionMessage,
-							groupId: destinationJid
-						}
-					}
-
-					const senderKeySessionTargets = senderKeyRecipients
-					await assertSessions(senderKeySessionTargets)
-
-					const result = await createParticipantNodes(senderKeyRecipients, senderKeyMsg, extraAttrs)
-					shouldIncludeDeviceIdentity = shouldIncludeDeviceIdentity || result.shouldIncludeDeviceIdentity
-
-					participants.push(...result.nodes)
-				}
-
-				if (isRetryResend) {
-					const { type, ciphertext: encryptedContent } = await signalRepository.encryptMessage({
-						data: bytes,
-						jid: participant?.jid!
-					})
-
-					binaryNodeContent.push({
-						tag: 'enc',
-						attrs: {
-							v: '2',
-							type,
-							count: participant!.count.toString()
-						},
-						content: encryptedContent
-					})
-				} else {
-					binaryNodeContent.push({
-						tag: 'enc',
-						attrs: { v: '2', type: 'skmsg', ...extraAttrs },
-						content: ciphertext
-					})
-
-					await authState.keys.set({ 'sender-key-memory': { [jid]: senderKeyMap } })
-				}
-			} else {
-				// ADDRESSING CONSISTENCY: Match own identity to conversation context
-				// TODO: investigate if this is true
-				let ownId = meId
-				if (isLid && meLid) {
-					ownId = meLid
-					logger.debug({ to: jid, ownId }, 'Using LID identity for @lid conversation')
-				} else {
-					logger.debug({ to: jid, ownId }, 'Using PN identity for @s.whatsapp.net conversation')
-				}
-
-				const { user: ownUser } = jidDecode(ownId)!
-
-				if (!participant) {
-					const targetUserServer = isLid ? 'lid' : 's.whatsapp.net'
-					devices.push({
-						user,
-						device: 0,
-						jid: jidEncode(user, targetUserServer, 0) // rajeh, todo: this entire logic is convoluted and weird.
-					})
-
-					if (user !== ownUser) {
-						const ownUserServer = isLid ? 'lid' : 's.whatsapp.net'
-						const ownUserForAddressing = isLid && meLid ? jidDecode(meLid)!.user : jidDecode(meId)!.user
-
-						devices.push({
-							user: ownUserForAddressing,
-							device: 0,
-							jid: jidEncode(ownUserForAddressing, ownUserServer, 0)
-						})
-					}
-
-					if (additionalAttributes?.['category'] !== 'peer') {
-						// Clear placeholders and enumerate actual devices
-						devices.length = 0
-
-						// Use conversation-appropriate sender identity
-						const senderIdentity =
-							isLid && meLid
-								? jidEncode(jidDecode(meLid)?.user!, 'lid', undefined)
-								: jidEncode(jidDecode(meId)?.user!, 's.whatsapp.net', undefined)
-
-						// Enumerate devices for sender and target with consistent addressing
-						const sessionDevices = await getUSyncDevices([senderIdentity, jid], true, false)
-						devices.push(...sessionDevices)
-
-						logger.debug(
-							{
-								deviceCount: devices.length,
-								devices: devices.map(d => `${d.user}:${d.device}@${jidDecode(d.jid)?.server}`)
-							},
-							'Device enumeration complete with unified addressing'
-						)
-					}
-				}
-
-				const allRecipients: string[] = []
-				const meRecipients: string[] = []
-				const otherRecipients: string[] = []
-				const { user: mePnUser } = jidDecode(meId)!
-				const { user: meLidUser } = meLid ? jidDecode(meLid)! : { user: null }
-
-				for (const { user, jid } of devices) {
-					const isExactSenderDevice = jid === meId || (meLid && jid === meLid)
-					if (isExactSenderDevice) {
-						logger.debug({ jid, meId, meLid }, 'Skipping exact sender device (whatsmeow pattern)')
-						continue
-					}
-
-					// Check if this is our device (could match either PN or LID user)
-					const isMe = user === mePnUser || user === meLidUser
-
-					if (isMe) {
-						meRecipients.push(jid)
-					} else {
-						otherRecipients.push(jid)
-					}
-
-					allRecipients.push(jid)
-				}
-
-				await assertSessions(allRecipients)
-
-				const [
-					{ nodes: meNodes, shouldIncludeDeviceIdentity: s1 },
-					{ nodes: otherNodes, shouldIncludeDeviceIdentity: s2 }
-				] = await Promise.all([
-					// For own devices: use DSM if available (1:1 chats only)
-					createParticipantNodes(meRecipients, meMsg || message, extraAttrs),
-					createParticipantNodes(otherRecipients, message, extraAttrs, meMsg)
-				])
-				participants.push(...meNodes)
-				participants.push(...otherNodes)
-
-				if (meRecipients.length > 0 || otherRecipients.length > 0) {
-					extraAttrs['phash'] = generateParticipantHashV2([...meRecipients, ...otherRecipients])
-				}
-
-				shouldIncludeDeviceIdentity = shouldIncludeDeviceIdentity || s1 || s2
-			}
-
-			if (participants.length) {
-				if (additionalAttributes?.['category'] === 'peer') {
-					const peerNode = participants[0]?.content?.[0] as BinaryNode
-					if (peerNode) {
-						binaryNodeContent.push(peerNode) // push only enc
+						stanza.attrs.to = participant.jid
 					}
 				} else {
-					binaryNodeContent.push({
-						tag: 'participants',
-						attrs: {},
-
-						content: participants
-					})
-				}
-			}
-
-			const stanza: BinaryNode = {
-				tag: 'message',
-				attrs: {
-					id: msgId,
-					to: destinationJid,
-					type: getMessageType(message),
-					...(additionalAttributes || {})
-				},
-				content: binaryNodeContent
-			}
-
-			// if the participant to send to is explicitly specified (generally retry recp)
-			// ensure the message is only sent to that person
-			// if a retry receipt is sent to everyone -- it'll fail decryption for everyone else who received the msg
-			if (participant) {
-				if (isJidGroup(destinationJid)) {
 					stanza.attrs.to = destinationJid
-					stanza.attrs.participant = participant.jid
-				} else if (areJidsSameUser(participant.jid, meId)) {
-					stanza.attrs.to = participant.jid
-					stanza.attrs.recipient = destinationJid
-				} else {
-					stanza.attrs.to = participant.jid
 				}
-			} else {
-				stanza.attrs.to = destinationJid
-			}
 
-			if (shouldIncludeDeviceIdentity) {
-				;(stanza.content as BinaryNode[]).push({
-					tag: 'device-identity',
-					attrs: {},
-					content: encodeSignedDeviceIdentity(authState.creds.account!, true)
-				})
+				if (shouldIncludeDeviceIdentity) {
+					(stanza.content as BinaryNode[]).push({
+						tag: 'device-identity',
+						attrs: { },
+						content: encodeSignedDeviceIdentity(authState.creds.account!, true)
+					})
 
-				logger.debug({ jid }, 'adding device identity')
-			}
+					logger.debug({ jid }, 'adding device identity')
+				}
 
-			if (additionalNodes && additionalNodes.length > 0) {
-				;(stanza.content as BinaryNode[]).push(...additionalNodes)
-			}
+				const nativeFlow = message?.interactiveMessage?.nativeFlowMessage ||
+					message?.viewOnceMessage?.message?.interactiveMessage?.nativeFlowMessage ||
+					message?.viewOnceMessageV2?.message?.interactiveMessage?.nativeFlowMessage ||
+					message?.viewOnceMessageV2Extension?.message?.interactiveMessage?.nativeFlowMessage
 
-			// add buttons here
+				const firstButtonName = nativeFlow?.buttons?.[0]?.name
 
-			const buttonType = getButtonType(message)
-			if(buttonType) {
-				(stanza.content as BinaryNode[]).push({
-					tag: 'biz',
-					attrs: { },
-					content: [
-						{
-							tag: buttonType,
-							attrs: getButtonArgs(message),
-							...(buttonType !== 'list' && { content: getButtonContent(message) })
+				const buttonType = getButtonType(message)
+				if (buttonType) {
+					const bizNode: BinaryNode = { tag: 'biz', attrs: {} }
+
+					if (nativeFlow && (firstButtonName === 'review_and_pay' || firstButtonName === 'payment_info')) {
+						bizNode.attrs = {
+							native_flow_name: firstButtonName === 'review_and_pay' ? 'order_details' : firstButtonName
 						}
-					]
-				})
+					} else if (nativeFlow && nativeFlowSpecials.includes(firstButtonName || '')) {
+						bizNode.content = [{
+							tag: 'biz',
+							attrs: {
+								actual_actors: '2',
+								host_storage: '2',
+								privacy_mode_ts: unixTimestampSeconds().toString()
+							},
+							content: [{
+								tag: 'interactive',
+								attrs: {
+									type: 'native_flow',
+									v: '1'
+								},
+								content: [{
+									tag: 'native_flow',
+									attrs: {
+										v: '2',
+										name: firstButtonName || 'mixed'
+									}
+								}]
+							},
+								{
+									tag: 'quality_control',
+									attrs: {
+										source_type: 'third_party'
+									}
+								}]
+						}]
+					} else if (nativeFlow || message?.buttonsMessage ||
+						message?.viewOnceMessage?.message?.buttonsMessage ||
+						message?.viewOnceMessageV2?.message?.buttonsMessage ||
+						message?.viewOnceMessageV2Extension?.message?.buttonsMessage) {
+						bizNode.attrs = {
+							actual_actors: '2',
+							host_storage: '2',
+							privacy_mode_ts: unixTimestampSeconds().toString()
+						}
+						bizNode.content = [{
+							tag: 'interactive',
+							attrs: {
+								type: 'native_flow',
+								v: '1'
+							},
+							content: [{
+								tag: 'native_flow',
+								attrs: {
+									v: '9',
+									name: 'mixed'
+								}
+							}]
+						}]
+					} else if (message?.listMessage) {
+						bizNode.content = [{
+							tag: 'list',
+							attrs: {
+								type: 'product_list',
+								v: '2'
+							}
+						}]
+					} else {
+						bizNode.content = [
+							{
+								tag: buttonType,
+								attrs: firstButtonName ? getButtonAttrs(message, nativeFlowSpecials.indexOf(firstButtonName) !== -1 ? firstButtonName : undefined) : getButtonAttrs(message),
+								content: firstButtonName ? getButtonContent(message, nativeFlowSpecials.indexOf(firstButtonName) !== -1 ? firstButtonName : undefined) : getButtonContent(message)
+							}
+						]
+					}
 
-				logger.debug({ jid }, 'adding business node')
-			}
+					(stanza.content as BinaryNode[]).push(bizNode)
 
+					logger.debug({ jid }, 'adding business node')
+				}
 
-			// end of buttons add
+				if (additionalNodes && additionalNodes.length > 0) {
+					(stanza.content as BinaryNode[]).push(...additionalNodes)
+				}
 
-			// if(additionalNodes && additionalNodes.length > 0) {
-			// 	(stanza.content as BinaryNode[]).push(...additionalNodes)
-			// }
+				logger.debug({ msgId }, `sending message to ${participants.length} devices`)
 
-			logger.debug({ msgId }, `sending message to ${participants.length} devices`)
-
-			await sendNode(stanza)
-		}, meId)
+				await sendNode(stanza)
+			}, 'key'
+		)
 
 		return msgId
 	}
@@ -1061,6 +1139,36 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		}
 	}
 
+	const getButtonAttrs = (message: proto.IMessage, nativeFlowSpecial?: string): BinaryNode['attrs'] => {
+		if (message.interactiveMessage?.nativeFlowMessage) {
+			switch (nativeFlowSpecial) {
+				case 'review_and_pay':
+				case 'payment_info':
+					return {
+						native_flow_name: nativeFlowSpecial === 'review_and_pay' ? 'order_details' : nativeFlowSpecial
+					}
+				default:
+					return {
+						actual_actors: '2',
+						host_storage: '2',
+						privacy_mode_ts: unixTimestampSeconds().toString()
+					}
+			}
+		} else if (message.templateMessage) {
+			// TODO: Add attributes
+			return {}
+		} else if (message.listMessage) {
+			const type: proto.Message.ListMessage.ListType | null | undefined = message.listMessage.listType
+			if (!type) {
+				throw new Boom('Expected list type inside message')
+			}
+
+			return { v: '2', type: ListType[type].toLowerCase() }
+		} else {
+			return {}
+		}
+	}
+
 	const getButtonArgs = (message: proto.IMessage): BinaryNode['attrs'] => {
 		if(message.templateMessage) {
 			// TODO: Add attributes
@@ -1075,55 +1183,70 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		} else if(message.interactiveMessage) {
             const buttons = message.interactiveMessage.nativeFlowMessage?.buttons || [];
             const hasPaymentInfoButton = buttons.some(button => button.name === "payment_info");
-            
+
             if (hasPaymentInfoButton) {
                 return {
                     v: "1",
                     type: "native_flow"
                 };
             }
-            
+
             return {
                 type: "native_flow"
             };
-        } 
+        }
 		else {
 			return {}
 		}
 	}
 
-	const getButtonContent = (message: proto.IMessage):  BinaryNode['content'] => {
-        if (!message) return []
-
-        if (message.templateMessage) {
-            // TODO: Add attributes
-            return [];
-        }
-        else if (message.interactiveMessage) {
-            const buttons = message.interactiveMessage.nativeFlowMessage?.buttons || [];
-            const hasPaymentInfoButton = buttons.some(button => button.name === "payment_info");
-            
-            if (hasPaymentInfoButton) {
-                return [{
-                    tag: "native_flow",
-                    attrs: {
-                        name: "payment_info"
-                    }
-                }];
-            } else {
-                return [{
-                    tag: "native_flow",
-                    attrs: {
-                        v: "2",
-                        name: "mixed"
-                    }
-                }];
-            }
-        }
-        else {
-            return [];
-        }
-    };
+	const getButtonContent = (message: proto.IMessage, nativeFlowSpecial?: string): BinaryNode['content'] => {
+		if (message.interactiveMessage?.nativeFlowMessage && nativeFlowSpecial) {
+			switch (nativeFlowSpecial) {
+				case 'review_and_pay':
+				case 'payment_info':
+					return []
+				default:
+					return [{
+						tag: 'interactive',
+						attrs: {
+							type: 'native_flow',
+							v: '1'
+						},
+						content: [{
+							tag: 'native_flow',
+							attrs: {
+								v: '2',
+								name: nativeFlowSpecial || 'mixed'
+							}
+						}]
+					},
+						{
+							tag: 'quality_control',
+							attrs: {
+								source_type: 'third_party'
+							}
+						}]
+			}
+		} else if (message.interactiveMessage?.nativeFlowMessage) {
+			return [{
+				tag: 'interactive',
+				attrs: {
+					type: 'native_flow',
+					v: '1'
+				},
+				content: [{
+					tag: 'native_flow',
+					attrs: {
+						v: '9',
+						name: 'mixed'
+					}
+				}]
+			}]
+		} else {
+			return []
+		}
+	}
 
 
 	const getPrivacyTokens = async (jids: string[]) => {
