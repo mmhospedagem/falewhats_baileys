@@ -30,7 +30,8 @@ import {
 	getNextPreKeysNode,
 	makeEventBuffer,
 	makeNoiseHandler,
-	promiseTimeout
+	promiseTimeout,
+	promiseTimeoutEnhanced
 } from '../Utils'
 import { getPlatformId } from '../Utils/browser-utils'
 import {
@@ -181,6 +182,34 @@ export const makeSocket = (config: SocketConfig) => {
 		}
 	}
 
+	const waitForMessageEnhanced = async<T>(
+		msgId: string,
+		operationType: 'group-metadata' | 'send-message' | 'query' | 'default' = 'default',
+		customTimeoutMs?: number
+	) => {
+		let onRecv: (json: any) => void
+		let onErr: (err: any) => void
+		try {
+			return await promiseTimeoutEnhanced<T>(operationType,
+				(resolve, reject) => {
+					onRecv = resolve
+					onErr = err => {
+						reject(err || new Boom('Connection Closed', { statusCode: DisconnectReason.connectionClosed }))
+					}
+
+					ws.on(`TAG:${msgId}`, onRecv)
+					ws.on('close', onErr)
+					ws.off('error', onErr)
+				},
+				customTimeoutMs
+			)
+		} finally {
+			ws.off(`TAG:${msgId}`, onRecv!)
+			ws.off('close', onErr!)
+			ws.off('error', onErr!)
+		}
+	}
+
 	/** send a query, and wait for its response. auto-generates message ID if not provided */
 	const query = async (node: BinaryNode, timeoutMs?: number) => {
 		if (!node.attrs.id) {
@@ -202,6 +231,29 @@ export const makeSocket = (config: SocketConfig) => {
 
 		return result
 	}
+
+	const queryEnhanced = async(
+		node: BinaryNode,
+		operationType: 'group-metadata' | 'send-message' | 'query' | 'default' = 'query',
+		customTimeoutMs?: number
+	) => {
+		if (!node.attrs.id) {
+			node.attrs.id = generateMessageTag()
+		}
+
+		const msgId = node.attrs.id
+		const wait = waitForMessageEnhanced(msgId, operationType, customTimeoutMs)
+
+		await sendNode(node)
+
+		const result = await (wait as Promise<BinaryNode>)
+		if ('tag' in result) {
+			assertNodeErrorFree(result)
+		}
+
+		return result
+	}
+
 
 	const executeUSyncQuery = async (usyncQuery: USyncQuery) => {
 		if (usyncQuery.protocols.length === 0) {
@@ -996,6 +1048,7 @@ export const makeSocket = (config: SocketConfig) => {
 		},
 		generateMessageTag,
 		query,
+		queryEnhanced,
 		waitForMessage,
 		waitForSocketOpen,
 		sendRawMessage,
