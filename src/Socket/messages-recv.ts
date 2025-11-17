@@ -697,9 +697,6 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 
 		switch (nodeType) {
 			case 'privacy_token':
-
-				await handlePrivacyTokenNotification(node)
-
 				const tokenList = getBinaryNodeChildren(child, 'token')
 				for (const { attrs, content } of tokenList) {
 					const jid = attrs.jid
@@ -874,43 +871,10 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 				})
 				authState.creds.registered = true
 				ev.emit('creds.update', authState.creds)
-
-				break
-
 		}
 
 		if (Object.keys(result).length) {
 			return result
-		}
-	}
-
-	const handlePrivacyTokenNotification = async (node: BinaryNode) => {
-		const tokensNode = getBinaryNodeChild(node, "tokens");
-		const from = jidNormalizedUser(node.attrs.from);
-
-		if (!tokensNode) return;
-
-		const tokenNodes = getBinaryNodeChildren(tokensNode, "token");
-
-		for (const tokenNode of tokenNodes) {
-		const { attrs, content } = tokenNode;
-		const type = attrs.type;
-		const timestamp = attrs.t;
-
-		if (type === "trusted_contact" && content instanceof Buffer) {
-			logger.debug(
-			{
-				from,
-				timestamp,
-				tcToken: content
-			},
-			"received trusted contact token"
-			);
-
-			await authState.keys.set({
-			"contacts-tc-token": { [from]: { token: content } }
-			});
-		}
 		}
 	}
 
@@ -1361,10 +1325,6 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 	const handleBadAck = async ({ attrs }: BinaryNode) => {
 		const key: WAMessageKey = { remoteJid: attrs.from, fromMe: true, id: attrs.id }
 
-		if (attrs.error === "475" && !isJidGroup(attrs.from)) {
-      		logger.error({ attrs }, "received 475 error in ack");
-		}
-
 		// WARNING: REFRAIN FROM ENABLING THIS FOR NOW. IT WILL CAUSE A LOOP
 		// // current hypothesis is that if pash is sent in the ack
 		// // it means -- the message hasn't reached all devices yet
@@ -1493,9 +1453,9 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 	ws.on('CB:notification', async (node: BinaryNode) => {
 		processNode('notification', node, 'handling notification', handleNotification)
 	})
-	ws.on("CB:ack,class:message", (node: BinaryNode) => {
-		handleBadAck(node).catch(error => onUnexpectedError(error, "handling bad ack"));
-	});
+	ws.on('CB:ack,class:message', (node: BinaryNode) => {
+		handleBadAck(node).catch(error => onUnexpectedError(error, 'handling bad ack'))
+	})
 
 	ev.on('call', ([call]) => {
 		if (!call) {
