@@ -1,10 +1,35 @@
 import { Boom } from '@hapi/boom'
 import NodeCache from '@cacheable/node-cache'
 import readline from 'readline'
-import makeWASocket, { AnyMessageContent, BinaryInfo, CacheStore, delay, DisconnectReason, downloadAndProcessHistorySyncNotification, encodeWAM, fetchLatestBaileysVersion,
-	generateWAMessageFromContent, getAggregateVotesInPollMessage, getHistoryMsg, isJidNewsletter, jidDecode, makeCacheableSignalKeyStore, normalizeMessageContent, PatchedMessageWithRecipientJID, proto, useMultiFileAuthState, WAMessageContent, WAMessageKey } from '../src'
-
+import makeWASocket, {
+	AnyMessageContent,
+	BinaryInfo,
+	CacheStore,
+	decryptEventResponse,
+	delay,
+	DisconnectReason,
+	downloadAndProcessHistorySyncNotification,
+	encodeWAM,
+	fetchLatestBaileysVersion,
+	generateWAMessageFromContent,
+	getAggregateVotesInPollMessage,
+	getHistoryMsg,
+	isJidNewsletter,
+	jidDecode,
+	makeCacheableSignalKeyStore,
+	normalizeMessageContent,
+	PatchedMessageWithRecipientJID,
+	proto,
+	useMultiFileAuthState,
+	WAMessageContent,
+	WAMessageKey
+} from '../src'
+//import MAIN_LOGGER from '../src/Utils/logger'
+import open from 'open'
+import fs from 'fs'
 import P from 'pino'
+import { buttons, review_and_pay } from './buttons'
+import { en } from 'typedoc-plugin-markdown/dist/internationalization'
 
 const logger = P({
   level: "trace",
@@ -13,16 +38,17 @@ const logger = P({
       {
         target: "pino-pretty", // pretty-print for console
         options: { colorize: true },
-        level: "trace",
+        level: "error",
       },
       {
         target: "pino/file", // raw file output
         options: { destination: './wa-logs.txt' },
-        level: "trace",
+        level: "error",
       },
     ],
   },
 })
+logger.level = 'error'
 
 const doReplies = process.argv.includes('--do-reply')
 const usePairingCode = process.argv.includes('--use-pairing-code')
@@ -104,18 +130,18 @@ const startSock = async() => {
 			}
 
 			// credentials updated -- save them
-			if(events['creds.update']) {
-				await saveCreds()
-			}
-
-			if(events['labels.association']) {
-				console.log(events['labels.association'])
-			}
-
-
-			if(events['labels.edit']) {
-				console.log(events['labels.edit'])
-			}
+			// if(events['creds.update']) {
+			// 	await saveCreds()
+			// }
+			//
+			// if(events['labels.association']) {
+			// 	console.log(events['labels.association'])
+			// }
+			//
+			//
+			// if(events['labels.edit']) {
+			// 	console.log(events['labels.edit'])
+			// }
 
 			if(events.call) {
 				console.log('recv call event', events.call)
@@ -133,7 +159,6 @@ const startSock = async() => {
 			// received a new message
       if (events['messages.upsert']) {
         const upsert = events['messages.upsert']
-        console.log('recv messages ', JSON.stringify(upsert, undefined, 2))
 
         if (!!upsert.requestId) {
           console.log("placeholder message received for request of id=" + upsert.requestId, upsert)
@@ -143,6 +168,7 @@ const startSock = async() => {
 
         if (upsert.type === 'notify') {
           for (const msg of upsert.messages) {
+						console.log('Received: ', JSON.stringify(msg, undefined, 2))
             if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
               const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text
               if (text == "requestPlaceholder" && !upsert.requestId) {
@@ -162,65 +188,87 @@ const startSock = async() => {
                 await sock!.readMessages([msg.key])
                 await sendMessageWTyping({ text: 'Hello there!' }, msg.key.remoteJid!)
               }
+							console.log('IsEvent: ', !!msg.message?.encEventResponseMessage)
+							console.log('Event: ', JSON.stringify(msg.message?.encEventResponseMessage, undefined, 2))
             }
+						if(msg.message?.encEventResponseMessage) {
+							try {
+								console.log('try')
+								const enc = msg.message.encEventResponseMessage!
+								const d = decryptEventResponse(
+									{ encPayload: enc.encPayload, encIv: enc.encIv },
+									{
+										eventCreatorJid: enc.eventCreationMessageKey!.remoteJid!,
+										eventMsgId: enc.eventCreationMessageKey!.id!,
+										eventEncKey: Uint8Array.from(Buffer.from('KmQK6m3jVZYo2MRqax45y9bRYZn54+7tydzUQNSgTBc=', 'base64')),
+										responderJid: msg.key.remoteJid!,
+									}
+								)
+
+								console.log('Resposta do Evento:', proto.Message.EventResponseMessage.EventResponseType[d.response!])
+							} catch (e) {
+								console.log('catch')
+								logger.error(e)
+							}
+						}
           }
         }
       }
 
 			// messages updated like status delivered, message deleted etc.
-			if(events['messages.update']) {
-				console.log(
-					JSON.stringify(events['messages.update'], undefined, 2)
-				)
-
-				for(const { key, update } of events['messages.update']) {
-					if(update.pollUpdates) {
-						const pollCreation: proto.IMessage = {} // get the poll creation message somehow
-						if(pollCreation) {
-							console.log(
-								'got poll update, aggregation: ',
-								getAggregateVotesInPollMessage({
-									message: pollCreation,
-									pollUpdates: update.pollUpdates,
-								})
-							)
-						}
-					}
-				}
-			}
-
-			if(events['message-receipt.update']) {
-				console.log(events['message-receipt.update'])
-			}
-
-			if(events['messages.reaction']) {
-				console.log(events['messages.reaction'])
-			}
-
-			if(events['presence.update']) {
-				console.log(events['presence.update'])
-			}
-
-			if(events['chats.update']) {
-				console.log(events['chats.update'])
-			}
-
-			if(events['contacts.update']) {
-				for(const contact of events['contacts.update']) {
-					if(typeof contact.imgUrl !== 'undefined') {
-						const newUrl = contact.imgUrl === null
-							? null
-							: await sock!.profilePictureUrl(contact.id!).catch(() => null)
-						console.log(
-							`contact ${contact.id} has a new profile pic: ${newUrl}`,
-						)
-					}
-				}
-			}
-
-			if(events['chats.delete']) {
-				console.log('chats deleted ', events['chats.delete'])
-			}
+		// 	if(events['messages.update']) {
+		// 		console.log(
+		// 			JSON.stringify(events['messages.update'], undefined, 2)
+		// 		)
+		//
+		// 		for(const { key, update } of events['messages.update']) {
+		// 			if(update.pollUpdates) {
+		// 				const pollCreation: proto.IMessage = {} // get the poll creation message somehow
+		// 				if(pollCreation) {
+		// 					console.log(
+		// 						'got poll update, aggregation: ',
+		// 						getAggregateVotesInPollMessage({
+		// 							message: pollCreation,
+		// 							pollUpdates: update.pollUpdates,
+		// 						})
+		// 					)
+		// 				}
+		// 			}
+		// 		}
+		// 	}
+		//
+		// 	if(events['message-receipt.update']) {
+		// 		console.log(events['message-receipt.update'])
+		// 	}
+		//
+		// 	if(events['messages.reaction']) {
+		// 		console.log(events['messages.reaction'])
+		// 	}
+		//
+		// 	if(events['presence.update']) {
+		// 		console.log(events['presence.update'])
+		// 	}
+		//
+		// 	if(events['chats.update']) {
+		// 		console.log(events['chats.update'])
+		// 	}
+		//
+		// 	if(events['contacts.update']) {
+		// 		for(const contact of events['contacts.update']) {
+		// 			if(typeof contact.imgUrl !== 'undefined') {
+		// 				const newUrl = contact.imgUrl === null
+		// 					? null
+		// 					: await sock!.profilePictureUrl(contact.id!).catch(() => null)
+		// 				console.log(
+		// 					`contact ${contact.id} has a new profile pic: ${newUrl}`,
+		// 				)
+		// 			}
+		// 		}
+		// 	}
+		//
+		// 	if(events['chats.delete']) {
+		// 		console.log('chats deleted ', events['chats.delete'])
+		// 	}
 		}
 	)
 
@@ -235,81 +283,51 @@ const startSock = async() => {
 	}
 }
 
-const pg_pix_code = {
-	reference_id: '1522563',
-	type: 'digital-goods',
-	payment_type: 'br',
-	payment_settings: [
-		{
-			type: 'payment_link',
-			payment_link: {
-				uri: 'https://the-payment-link',
-			},
-		},
-		{
-			type: 'boleto',
-			boleto: { digitable_line: '34191095866353261093675008900005412640000021128' },
-		},
-		{
-			type: 'pix_dynamic_code',
-			pix_dynamic_code: {
-				code: '00020101021226770014BR.GOV.BCB.PIX2555api.itau/pix/qr/v2/3dca0c19-c1ce-4308-ac78-1cb1dbde4e1b5204000053039865802BR5915HINOVA PAYMENTS6014BELO HORIZONTE62070503***63044602',
-				merchant_name: 'Aaprovel',
-				key: '18391406000108',
-				key_type: 'CNPJ',
-			},
-		},
-	],
-	currency: 'BRL',
-	total_amount: { value: 21128, offset: 100 },
-	order: {
-		status: 'pending',
-		tax: { value: 0, offset: 100, description: 'description' },
-		items: [
-			{
-				retailer_id: '1266',
-				name: 'Proteu00e7u00e3o veicular',
-				amount: { value: 21128, offset: 100 },
-				quantity: 1,
-			},
-		],
-		subtotal: { value: 21128, offset: 100 },
-	},
-};
-
-
 startSock()
 	.then(async sock => {
 		await delay(5000)
-		console.log('---------------------FLOW-----------------------')
-		const nativeFlowButton = {
-			name: 'review_and_pay',
-			buttonParamsJson: JSON.stringify(pg_pix_code),
-			messageParamsJson: JSON.stringify({"bottom_sheet":{"in_thread_buttons_limit":3,"divider_indices":[]}})
-		};
+		const jid = '553197853327@s.whatsapp.net'
 
-		const interactiveMessage: proto.Message.IInteractiveMessage = {
-				body: {
-					text: 'texto'
+		// const interactiveMessage: proto.Message.IInteractiveMessage = {
+		// 	body: {
+		// 		text: 'Code :' + Date.now()
+		// 	},
+		// 	header: {
+		// 		hasMediaAttachment: false,
+		// 		// imageMessage: up.imageMessage
+		// 	},
+		// 	footer: {
+		// 		text: 'CodeChat®'
+		// 	},
+		// 	nativeFlowMessage: {
+		// 		buttons: [review_and_pay]
+		// 	}
+		// }
+
+		const startDate = new Date()
+		startDate.setHours(startDate.getHours() + 1)
+		const endDate = new Date(startDate.getTime());
+		endDate.setHours(endDate.getHours() + 1);
+
+		// node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+		const hash = 'KmQK6m3jVZYo2MRqax45y9bRYZn54+7tydzUQNSgTBc='
+
+		await sock.sendMessage(jid, {
+			event: {
+				name: 'CodeChat',
+				description: 'Decrypt Event',
+				startDate,
+				endDate,
+				call: 'video',
+				location: {
+					name: 'Escritório',
+					address: 'Endereço completo',
+					degreesLongitude: 0,
+					degreesLatitude: 0
 				},
-				header: {
-					title: 'titulo',
-					hasMediaAttachment: false
-				},
-				footer: {
-					text: 'footer'
-				},
-				nativeFlowMessage: {
-					buttons: [nativeFlowButton]
-				}
-		}
-
-		const jid = '556284879620@s.whatsapp.net'
-
-		// Monta a mensagem no padrao
-		const m = generateWAMessageFromContent(jid, { interactiveMessage }, {userJid: jid})
-
-		await sock.sendMessage(jid, { interactiveMessage }, {});
-		console.log('---------------------FLOW END-----------------------')
+				messageSecret: Uint8Array.from(Buffer.from(hash, 'base64'))
+			}
+		})
+		console.log('---------------------SEND MESSAGE-----------------------')
 	})
-	.catch(logger.error)
+	.catch(error => logger.error(error))

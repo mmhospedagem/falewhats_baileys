@@ -44,8 +44,53 @@ export const BufferJSON = {
 	}
 }
 
+export const getAdaptiveTimeout = (operationType: 'group-metadata' | 'send-message' | 'query' | 'default', defaultTimeout?: number): number => {
+	const timeouts = {
+		'group-metadata': 90_000, // 90 seconds for group metadata operations
+		'send-message': 60_000, // 60 seconds for sending messages
+		'query': 45_000, // 45 seconds for general queries
+		'default': 120_000 // 2 minutes default
+	}
+
+	return defaultTimeout || timeouts[operationType] || timeouts.default
+}
+
+
+export async function promiseTimeoutEnhanced<T>(
+	operationType: 'group-metadata' | 'send-message' | 'query' | 'default',
+	promise: (resolve: (v: T) => void, reject: (error: unknown) => void) => void,
+	customTimeoutMs?: number
+) {
+	const timeoutMs: number = getAdaptiveTimeout(operationType, customTimeoutMs)
+
+	if (!timeoutMs) {
+		return new Promise(promise)
+	}
+
+	const stack: string | undefined = new Error().stack
+	const { delay, cancel } = delayCancellable(timeoutMs)
+	const p = new Promise<T>((resolve, reject) => {
+		delay
+			.then(() => reject(
+				new Boom(`Operation '${operationType}' timed out after ${timeoutMs}ms`, {
+					statusCode: DisconnectReason.timedOut,
+					data: {
+						stack,
+						operationType,
+						timeoutMs
+					}
+				})
+			))
+			.catch(err => reject(err))
+
+		promise(resolve, reject)
+	})
+		.finally(cancel)
+	return p
+}
+
 export const getKeyAuthor = (key: WAMessageKey | undefined | null, meId = 'me') =>
-	(key?.fromMe ? meId : key?.participant || key?.remoteJid) || ''
+	(key?.fromMe ? meId : key?.participantAlt || key?.remoteJidAlt || key?.participant || key?.remoteJid) || ''
 
 export const writeRandomPadMax16 = (msg: Uint8Array) => {
 	const pad = randomBytes(1)
@@ -171,50 +216,6 @@ export async function promiseTimeout<T>(
 		promise(resolve, reject)
 	}).finally(cancel)
 	return p as Promise<T>
-}
-
-export const getAdaptiveTimeout = (operationType: 'group-metadata' | 'send-message' | 'query' | 'default', defaultTimeout?: number): number => {
-	const timeouts = {
-		'group-metadata': 90_000, // 90 seconds for group metadata operations
-		'send-message': 60_000, // 60 seconds for sending messages
-		'query': 45_000, // 45 seconds for general queries
-		'default': 120_000 // 2 minutes default
-	}
-
-	return defaultTimeout || timeouts[operationType] || timeouts.default
-}
-
-export async function promiseTimeoutEnhanced<T>(
-	operationType: 'group-metadata' | 'send-message' | 'query' | 'default',
-	promise: (resolve: (v: T) => void, reject: (error: unknown) => void) => void,
-	customTimeoutMs?: number
-) {
-	const timeoutMs: number = getAdaptiveTimeout(operationType, customTimeoutMs)
-
-	if (!timeoutMs) {
-		return new Promise(promise)
-	}
-
-	const stack: string | undefined = new Error().stack
-	const { delay, cancel } = delayCancellable(timeoutMs)
-	const p = new Promise<T>((resolve, reject) => {
-		delay
-			.then(() => reject(
-				new Boom(`Operation '${operationType}' timed out after ${timeoutMs}ms`, {
-					statusCode: DisconnectReason.timedOut,
-					data: {
-						stack,
-						operationType,
-						timeoutMs
-					}
-				})
-			))
-			.catch(err => reject(err))
-
-		promise(resolve, reject)
-	})
-		.finally(cancel)
-	return p
 }
 
 // inspired from whatsmeow code
