@@ -278,26 +278,16 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 			tag: 'collection_add',
 			attrs: { biz_jid: jid },
 			content: [
-			{
-				tag: 'name',
-				attrs: {},
-				content: Buffer.from(args.name)
-			},
-			{
-				tag: 'product_ids',
-				attrs: {},
-				content: productNodes
-			},
-			{
-				tag: 'width',
-				attrs: {},
-				content: Buffer.from('100')
-			},
-			{
-				tag: 'height',
-				attrs: {},
-				content: Buffer.from('100')
-			}
+				{
+					tag: 'name',
+					attrs: {},
+					content: Buffer.from(args.name)
+				},
+				{
+					tag: 'product_ids',
+					attrs: {},
+					content: productNodes
+				}
 			]
 		}
 		]
