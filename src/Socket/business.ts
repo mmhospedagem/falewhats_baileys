@@ -249,60 +249,56 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		return parseCollectionsNode(result)
 	}
 
-	const createCollection = async (jid?: string, args?: { 
-		name: string,
-		products: string[]
-	}) => {
+	const createCollection = async (
+		jid?: string,
+		args?: { name: string; products: string[] }
+	) => {
 
-		jid = jid || authState.creds.me?.id
-		jid = jidNormalizedUser(jid) 
+		if (!args?.name) {
+			throw new Error("Nome da collection é obrigatório.");
+		}
 
-		const productNodes = args?.products.map(id => ({
+		if (!args.products?.length) {
+			throw new Error("É obrigatório informar pelo menos 1 productId.");
+		}
+
+		jid = jid || authState.creds.me?.id;
+		jid = jidNormalizedUser(jid);
+
+		const productNodes = args.products.map(id => ({
 			tag: "id",
 			attrs: {},
 			content: Buffer.from(id)
 		}));
 
 		const result = await query({
-			tag: 'iq',
+			tag: "iq",
 			attrs: {
 				to: S_WHATSAPP_NET,
-				type: 'set',
-				xmlns: 'w:biz:catalog'
+				type: "set",
+				xmlns: "w:biz:catalog"
 			},
 			content: [
 				{
-					tag: 'collection_add',
-					attrs: {
-						biz_jid: jid
-					},
+					tag: "collection_add",
+					attrs: { v: "1" },
 					content: [
 						{
-							tag: 'name',
+							tag: "name",
 							attrs: {},
-							content: Buffer.from(args?.name)
+							content: Buffer.from(args.name)
 						},
 						{
-							tag: 'product_ids',
+							tag: "product_ids",
 							attrs: {},
 							content: productNodes
-						},
-						{
-							tag: 'width',
-							attrs: {},
-							content: Buffer.from('100')
-						},
-						{
-							tag: 'height',
-							attrs: {},
-							content: Buffer.from('100')
 						}
 					]
 				}
 			]
 		});
 
-		return getBinaryNodeChild(result, 'collection_add');
+		return getBinaryNodeChild(result, "collection_add");
 	};
 
 	const getOrderDetails = async (orderId: string, tokenBase64: string) => {
