@@ -262,7 +262,6 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 			}
 		];
 
-		
 
 		const result = await query({
 			tag: 'iq',
@@ -275,8 +274,23 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 				{
 					tag: 'collection_add',
 					attrs: { v: '1' },
-					content
+					content: [
+					
+						{
+							tag: 'width',
+							attrs: {},
+							content: Buffer.from('100')
+						},
+						{
+							tag: 'height',
+							attrs: {},
+							content: Buffer.from('100')
+						}
+							
+					]
+
 				}
+					
 			]
 		});
 
