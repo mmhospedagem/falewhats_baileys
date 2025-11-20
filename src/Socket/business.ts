@@ -18,6 +18,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 	const { authState, query, waUploadToServer } = sock
 
 	const updateBussinesProfile = async (args: UpdateBussinesProfileProps) => {
+		
 		const node: BinaryNode[] = []
 		const simpleFields: (keyof UpdateBussinesProfileProps)[] = ['address', 'email', 'description']
 
@@ -248,6 +249,62 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		return parseCollectionsNode(result)
 	}
 
+	const createCollection = async (args: { 
+		name: string,
+		products?: string[], 
+	}) => {
+
+		const content: BinaryNode[] = [
+			{
+				tag: 'name',
+				attrs: {},
+				content: Buffer.from(args.name)
+			},
+			{
+				tag: 'width',
+				attrs: {},
+				content: Buffer.from('100')
+			},
+			{
+				tag: 'height',
+				attrs: {},
+				content: Buffer.from('100')
+			}
+		];
+
+		// produtos dentro da coleção (opcional)
+		if (args.products && args.products.length) {
+			content.push({
+				tag: 'product_ids',
+				attrs: {},
+				content: args.products.map(id => ({
+					tag: 'id',
+					attrs: {},
+					content: Buffer.from(id)
+				}))
+			});
+		}
+
+		const result = await query({
+			tag: 'iq',
+			attrs: {
+				to: S_WHATSAPP_NET,
+				type: 'set',
+				xmlns: 'w:biz:catalog'
+			},
+			content: [
+				{
+					tag: 'collection_add',
+					attrs: { v: '1' },
+					content
+				}
+			]
+		});
+
+		// O WhatsApp retorna a coleção criada
+		return getBinaryNodeChild(result, 'collection_add');
+	};
+
 	const getOrderDetails = async (orderId: string, tokenBase64: string) => {
 		const result = await query({
 			tag: 'iq',
@@ -411,6 +468,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		getOrderDetails,
 		getCatalog,
 		getCollections,
+		createCollection,
 		productCreate,
 		productDelete,
 		productUpdate,
