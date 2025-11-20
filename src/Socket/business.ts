@@ -224,7 +224,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 			},
 			content: [
 				{
-					tag: 'collection',
+					tag: 'collections',
 					attrs: { biz_jid: jid },
 					content: [
 						{
