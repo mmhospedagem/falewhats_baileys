@@ -259,31 +259,10 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 				tag: 'name',
 				attrs: {},
 				content: Buffer.from(args.name)
-			},
-			{
-				tag: 'width',
-				attrs: {},
-				content: Buffer.from('100')
-			},
-			{
-				tag: 'height',
-				attrs: {},
-				content: Buffer.from('100')
 			}
 		];
 
-		// produtos dentro da coleção (opcional)
-		if (args.products && args.products.length) {
-			content.push({
-				tag: 'product_ids',
-				attrs: {},
-				content: args.products.map(id => ({
-					tag: 'id',
-					attrs: {},
-					content: Buffer.from(id)
-				}))
-			});
-		}
+		
 
 		const result = await query({
 			tag: 'iq',
