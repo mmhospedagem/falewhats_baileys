@@ -202,13 +202,10 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		args: { 
 			name: string; 
 			products: string[]; 
-		},
-		jid?: string,
+		}
 	) => {
 
-		jid = jid || authState.creds.me?.id
-		jid = jidNormalizedUser(jid)
-
+		
 		const productNodes = args.products.map(id => ({
 			tag: "id",
 			attrs: {},
@@ -225,7 +222,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 			content: [
 				{
 					tag: 'collections',
-					attrs: { biz_jid: jid },
+					attrs: {},
 					content: [
 						{
 							tag: 'name',
