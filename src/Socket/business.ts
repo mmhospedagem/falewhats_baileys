@@ -269,7 +269,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 			},
 			content: [
 				{
-					tag: 'collection_add',
+					tag: 'collections_add',
 					attrs: { v: '1' },
 					content: [
 						{
