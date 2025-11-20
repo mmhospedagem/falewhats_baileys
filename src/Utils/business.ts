@@ -139,8 +139,8 @@ export const toProductNode = (productId: string | undefined, product: ProductCre
 	if (typeof product.price !== 'undefined') {
 		content.push({
 			tag: 'price',
-			attrs: { currency: product.currency },
-			content: Buffer.from(product.price.toString())
+			attrs: {},
+			content: Buffer.from(product.price)
 		})
 	}
 
