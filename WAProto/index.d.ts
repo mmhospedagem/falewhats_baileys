@@ -13670,6 +13670,7 @@ export namespace proto {
         groupHistoryBundleInfo?: (proto.IGroupHistoryBundleInfo|null);
         interactiveMessageAdditionalMetadata?: (proto.IInteractiveMessageAdditionalMetadata|null);
         quarantinedMessage?: (proto.IQuarantinedMessage|null);
+				retryCount?: number
     }
 
     class WebMessageInfo implements IWebMessageInfo {
