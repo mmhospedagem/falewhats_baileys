@@ -253,15 +253,6 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		name: string
 	}) => {
 
-		const content: BinaryNode[] = [
-			{
-				tag: 'name',
-				attrs: {},
-				content: Buffer.from(args.name)
-			}
-		];
-
-
 		const result = await query({
 			tag: 'iq',
 			attrs: {
@@ -274,7 +265,11 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 					tag: 'collection_add',
 					attrs: { v: '1' },
 					content: [
-					
+						{
+							tag: 'name',
+							attrs: {},
+							content: Buffer.from(args.name)
+						},
 						{
 							tag: 'width',
 							attrs: {},
@@ -285,15 +280,11 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 							attrs: {},
 							content: Buffer.from('100')
 						}
-							
 					]
-
 				}
-					
 			]
 		});
 
-		// O WhatsApp retorna a coleção criada
 		return getBinaryNodeChild(result, 'collection_add');
 	};
 
