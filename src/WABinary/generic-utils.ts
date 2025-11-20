@@ -50,10 +50,34 @@ export const getBinaryNodeChildUInt = (node: BinaryNode, childTag: string, lengt
 }
 
 export const assertNodeErrorFree = (node: BinaryNode) => {
-	const errNode = getBinaryNodeChild(node, 'error')
-	if (errNode) {
-		throw new Boom(errNode.attrs.text || 'Unknown error', { data: +errNode.attrs.code! })
-	}
+    const errNode = getBinaryNodeChild(node, 'error')
+
+    if (errNode) {
+        const code = +errNode.attrs.code!
+        const text = errNode.attrs.text || 'Unknown error'
+
+        // CAPTURA O NÓ COMPLETO <error_data>
+        const errorDataNode = getBinaryNodeChild(errNode, 'error_data')
+        let reason: string | null = null
+
+        if (errorDataNode && errorDataNode.content) {
+            try {
+                reason = errorDataNode.content.toString()
+            } catch {
+                reason = null
+            }
+        }
+
+        // Retornar todos os dados, incluindo "raw"
+        throw new Boom(text, {
+            data: {
+                code,
+                text,
+                reason,
+                raw: errNode
+            }
+        })
+    }
 }
 
 export const reduceBinaryNodeToDictionary = (node: BinaryNode, tag: string) => {
