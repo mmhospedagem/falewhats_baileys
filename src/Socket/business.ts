@@ -250,8 +250,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 	}
 
 	const createCollection = async (args: { 
-		name: string,
-		products?: string[], 
+		name: string
 	}) => {
 
 		const content: BinaryNode[] = [
