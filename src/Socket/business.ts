@@ -278,7 +278,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 							content: Buffer.from(args.name)
 						},
 						{
-							tag: 'product_ids',
+							tag: 'products',
 							attrs: {},
 							content: productNodes
 						},
