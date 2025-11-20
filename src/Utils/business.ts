@@ -144,6 +144,14 @@ export const toProductNode = (productId: string | undefined, product: ProductCre
 		})
 	}
 
+	if (typeof product.url !== 'undefined') {
+		content.push({
+			tag: 'url',
+			attrs: {},
+			content: Buffer.from(product.url.toString())
+		})
+	}
+
 	if (typeof product.currency !== 'undefined') {
 		content.push({
 			tag: 'currency',
