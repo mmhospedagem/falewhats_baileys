@@ -249,7 +249,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		return parseCollectionsNode(result)
 	}
 
-	const createCollection = async (jid?: string, args: { 
+	const createCollection = async (jid?: string, args?: { 
 		name: string,
 		products: string[]
 	}) => {
@@ -257,7 +257,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		jid = jid || authState.creds.me?.id
 		jid = jidNormalizedUser(jid) 
 
-		const productNodes = args.products.map(id => ({
+		const productNodes = args?.products.map(id => ({
 			tag: "id",
 			attrs: {},
 			content: Buffer.from(id)
@@ -280,7 +280,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 						{
 							tag: 'name',
 							attrs: {},
-							content: Buffer.from(args.name)
+							content: Buffer.from(args?.name)
 						},
 						{
 							tag: 'product_ids',
