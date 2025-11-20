@@ -249,10 +249,13 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		return parseCollectionsNode(result)
 	}
 
-	const createCollection = async (args: { 
+	const createCollection = async (jid?: string, args: { 
 		name: string,
 		products: string[]
 	}) => {
+
+		jid = jid || authState.creds.me?.id
+		jid = jidNormalizedUser(jid) 
 
 		const productNodes = args.products.map(id => ({
 			tag: "id",
@@ -269,8 +272,10 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 			},
 			content: [
 				{
-					tag: 'collections_add',
-					attrs: { v: '1' },
+					tag: 'collection_add',
+					attrs: {
+						biz_jid: jid
+					},
 					content: [
 						{
 							tag: 'name',
@@ -278,7 +283,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 							content: Buffer.from(args.name)
 						},
 						{
-							tag: 'products',
+							tag: 'product_ids',
 							attrs: {},
 							content: productNodes
 						},
