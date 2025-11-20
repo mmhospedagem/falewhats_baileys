@@ -32,7 +32,7 @@ export type ProductBase = {
 	retailerId?: string
 	url?: string
 	description: string
-	price: number
+	price: string | number
 	currency: string
 	isHidden?: boolean
 }
