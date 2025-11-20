@@ -250,8 +250,15 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 	}
 
 	const createCollection = async (args: { 
-		name: string
+		name: string,
+		products: string[]
 	}) => {
+
+		const productNodes = args.products.map(id => ({
+			tag: "id",
+			attrs: {},
+			content: Buffer.from(id)
+		}));
 
 		const result = await query({
 			tag: 'iq',
@@ -269,6 +276,11 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 							tag: 'name',
 							attrs: {},
 							content: Buffer.from(args.name)
+						},
+						{
+							tag: 'product_ids',
+							attrs: {},
+							content: productNodes
 						},
 						{
 							tag: 'width',
