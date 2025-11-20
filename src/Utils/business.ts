@@ -140,7 +140,7 @@ export const toProductNode = (productId: string | undefined, product: ProductCre
 		content.push({
 			tag: 'price',
 			attrs: {},
-			content: Buffer.from(product.price)
+			content: Buffer.from(product.price.toString())
 		})
 	}
 
