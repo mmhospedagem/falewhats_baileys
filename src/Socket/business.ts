@@ -152,57 +152,6 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		})
 	}
 
-	const getCatalog = async ({ jid, limit, cursor }: GetCatalogOptions) => {
-		jid = jid || authState.creds.me?.id
-		jid = jidNormalizedUser(jid)
-
-		const queryParamNodes: BinaryNode[] = [
-			{
-				tag: 'limit',
-				attrs: {},
-				content: Buffer.from((limit || 10).toString())
-			},
-			{
-				tag: 'width',
-				attrs: {},
-				content: Buffer.from('100')
-			},
-			{
-				tag: 'height',
-				attrs: {},
-				content: Buffer.from('100')
-			}
-		]
-
-		if (cursor) {
-			queryParamNodes.push({
-				tag: 'after',
-				attrs: {},
-				content: cursor
-			})
-		}
-
-		const result = await query({
-			tag: 'iq',
-			attrs: {
-				to: S_WHATSAPP_NET,
-				type: 'get',
-				xmlns: 'w:biz:catalog'
-			},
-			content: [
-				{
-					tag: 'product_catalog',
-					attrs: {
-						jid,
-						allow_shop_source: 'true'
-					},
-					content: queryParamNodes
-				}
-			]
-		})
-		return parseCatalogNode(result)
-	}
-
 	const getCollections = async (jid?: string, limit = 51) => {
 		jid = jid || authState.creds.me?.id
 		jid = jidNormalizedUser(jid)
@@ -257,44 +206,95 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		jid?: string,
 	) => {
 
-	jid = jid || authState.creds.me?.id
-	jid = jidNormalizedUser(jid)
+		jid = jid || authState.creds.me?.id
+		jid = jidNormalizedUser(jid)
 
-	const productNodes = args.products.map(id => ({
-		tag: "id",
-		attrs: {},
-		content: Buffer.from(id)
-	}));
+		const productNodes = args.products.map(id => ({
+			tag: "id",
+			attrs: {},
+			content: Buffer.from(id)
+		}));
 
-	const result = await query({
-		tag: 'iq',
-		attrs: {
-		to: S_WHATSAPP_NET,
-		type: 'set',
-		xmlns: 'w:biz:catalog'
-		},
-		content: [
-		{
-			tag: 'collection_add',
-			attrs: { biz_jid: jid },
+		const result = await query({
+			tag: 'iq',
+			attrs: {
+				to: S_WHATSAPP_NET,
+				type: 'set',
+				xmlns: 'w:biz:catalog'
+			},
 			content: [
 				{
-					tag: 'name',
-					attrs: {},
-					content: Buffer.from(args.name)
-				},
-				{
-					tag: 'product_ids',
-					attrs: {},
-					content: productNodes
+					tag: 'collection',
+					attrs: { biz_jid: jid },
+					content: [
+						{
+							tag: 'name',
+							attrs: {},
+							content: Buffer.from(args.name)
+						},
+						{
+							tag: 'product_ids',
+							attrs: {},
+							content: productNodes
+						}
+					]
 				}
 			]
-		}
-		]
-	});
+		});
 
-	return getBinaryNodeChild(result, 'collection_add');
+		return getBinaryNodeChild(result, 'collection_add');
 	};
+
+	const getCatalog = async ({ jid, limit, cursor }: GetCatalogOptions) => {
+		jid = jid || authState.creds.me?.id
+		jid = jidNormalizedUser(jid)
+
+		const queryParamNodes: BinaryNode[] = [
+			{
+				tag: 'limit',
+				attrs: {},
+				content: Buffer.from((limit || 10).toString())
+			},
+			{
+				tag: 'width',
+				attrs: {},
+				content: Buffer.from('100')
+			},
+			{
+				tag: 'height',
+				attrs: {},
+				content: Buffer.from('100')
+			}
+		]
+
+		if (cursor) {
+			queryParamNodes.push({
+				tag: 'after',
+				attrs: {},
+				content: cursor
+			})
+		}
+
+		const result = await query({
+			tag: 'iq',
+			attrs: {
+				to: S_WHATSAPP_NET,
+				type: 'get',
+				xmlns: 'w:biz:catalog'
+			},
+			content: [
+				{
+					tag: 'product_catalog',
+					attrs: {
+						jid,
+						allow_shop_source: 'true'
+					},
+					content: queryParamNodes
+				}
+			]
+		})
+		return parseCatalogNode(result)
+	}
 
 	const getOrderDetails = async (orderId: string, tokenBase64: string) => {
 		const result = await query({
