@@ -277,14 +277,6 @@ export const uploadingNecessaryImages = async (
 	return results
 }
 
-const swapCDN = (url?: string) => {
-	if (!url) return url
-	return url.replace(
-		/https:\/\/media-[^\/]+\.cdn\.whatsapp\.net/gi,
-		"https://pps.whatsapp.net"
-	)
-}
-
 const parseImageUrls = (mediaNode: BinaryNode) => {
     
 	const imgNode = getBinaryNodeChild(mediaNode, 'image')
@@ -302,7 +294,7 @@ const parseImageUrls = (mediaNode: BinaryNode) => {
 
     return {
         requested: swapCDN(requested),
-        original: swapCDN(original)
+        original: original
     }
 
 }
