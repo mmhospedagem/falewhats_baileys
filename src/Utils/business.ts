@@ -144,6 +144,14 @@ export const toProductNode = (productId: string | undefined, product: ProductCre
 		})
 	}
 
+	if (typeof product.salePrice !== 'undefined') {
+		content.push({
+			tag: 'sale_price',
+			attrs: {},
+			content: Buffer.from(product.salePrice)
+		})
+	}
+
 	if (typeof product.url !== 'undefined') {
 		content.push({
 			tag: 'url',
