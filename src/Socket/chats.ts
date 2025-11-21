@@ -405,7 +405,8 @@ export const makeChatsSocket = (config: SocketConfig) => {
 				: undefined
 			const websiteStr = website?.content?.toString()
 
-			const joined = getBinaryNodeChild(profiles, 'member_since_text') ?? ""
+			const memberSinceTextNode = getBinaryNodeChild(profiles, 'member_since_text')
+			const joined = memberSinceTextNode?.content?.toString() ?? null
 
 			return {
 				wid: profiles.attrs?.jid,
@@ -418,7 +419,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 					timezone: businessHours?.attrs?.timezone,
 					business_config: businessHoursConfig?.map(({ attrs }) => attrs as unknown as WABusinessHoursConfig)
 				},
-				join: joined?.toString()
+				join: joined
 			}
 		}
 	}
