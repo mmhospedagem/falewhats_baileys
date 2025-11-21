@@ -408,11 +408,15 @@ export const makeChatsSocket = (config: SocketConfig) => {
 			const memberSinceTextNode = getBinaryNodeChild(profiles, 'member_since_text')
 			const joined = memberSinceTextNode?.content?.toString() ?? null
 
+			const customUrlChild = getBinaryNodeChild(profiles, 'custom_url')
+			const customUrl = customUrlChild?.content?.toString() ?? null
+
 			return {
 				wid: profiles.attrs?.jid,
 				address: address?.content?.toString(),
 				description: description?.content?.toString() || '',
 				website: websiteStr ? [websiteStr] : [],
+				customUrl: "https://wa.me/" + customUrl,
 				email: email?.content?.toString(),
 				category: category?.content?.toString(),
 				business_hours: {

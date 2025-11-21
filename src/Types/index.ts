@@ -59,6 +59,7 @@ export type WABusinessProfile = {
 		business_config?: WABusinessHoursConfig[]
 	}
 	website: string[]
+	customUrl: string | null
 	category?: string
 	wid?: string
 	address?: string
