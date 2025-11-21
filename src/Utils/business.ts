@@ -288,15 +288,23 @@ const swapCDN = (url?: string) => {
 const parseImageUrls = (mediaNode: BinaryNode) => {
     
 	const imgNode = getBinaryNodeChild(mediaNode, 'image')
-    
-    const requested = getBinaryNodeChildString(imgNode, 'request_image_url')!
-    const original = getBinaryNodeChildString(imgNode, 'original_image_url')!
+
+    const requested = getBinaryNodeChildString(imgNode, 'request_image_url')
+    const original = getBinaryNodeChildString(imgNode, 'original_image_url')
+
+    const swapCDN = (url?: string) => {
+        if (!url) return ""
+        return url.replace(
+            /https:\/\/media-[^\/]+\.cdn\.whatsapp\.net/gi,
+            "https://pps.whatsapp.net"
+        )
+    }
 
     return {
         requested: swapCDN(requested),
         original: swapCDN(original)
     }
-	
+
 }
 
 const parseStatusInfo = (mediaNode: BinaryNode): CatalogStatus => {
