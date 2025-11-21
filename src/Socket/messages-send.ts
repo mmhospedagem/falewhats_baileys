@@ -960,7 +960,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 			const firstButtonName = nativeFlow?.buttons?.[0]?.name
 
 			const buttonType = getButtonType(message)
-			console.log({ buttonType })
+			//console.log({ buttonType })
 			if(buttonType) {
 				const bizNode: BinaryNode = { tag: 'biz', attrs: {} }
 
