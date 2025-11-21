@@ -411,8 +411,27 @@ export const makeChatsSocket = (config: SocketConfig) => {
 			const customUrlChild = getBinaryNodeChild(profiles, 'custom_url')
 			const customUrl = customUrlChild?.content?.toString() ?? null
 
+			const rawExtraFields =
+				Array.isArray(profiles.content)
+					? profiles.content
+						.filter((n: any) => typeof n === "object" && n !== null)
+						.map((node: any) => ({
+							tag: node.tag,
+							attrs: node.attrs,
+							content:
+								typeof node.content === "string"
+									? node.content
+									: node.content?.toString?.() || null
+						}))
+					: [];
+
+			const identity = rawExtraFields.find(f => f.tag === "biz_identity_info");
+
+			const isVerified = identity?.attrs?.vlevel === "high" &&
+                   identity?.attrs?.is_signed === "true";
+
 			return {
-				wid: profiles.attrs?.jid,
+				isVerified: isVerified,
 				address: address?.content?.toString(),
 				description: description?.content?.toString() || '',
 				website: websiteStr ? [websiteStr] : [],

@@ -51,6 +51,7 @@ export type WABusinessHoursConfig = {
 }
 
 export type WABusinessProfile = {
+	isVerified: boolean
 	description: string
 	email: string | undefined
 	business_hours: {
