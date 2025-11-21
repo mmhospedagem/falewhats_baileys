@@ -221,7 +221,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 			},
 			content: [
 				{
-					tag: 'collections',
+					tag: 'collection',
 					attrs: {},
 					content: [
 						{
@@ -233,6 +233,11 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 							tag: 'product_ids',
 							attrs: {},
 							content: productNodes
+						},
+						{
+							tag: 'biz_jid',
+							attrs: {},
+							content: "556231425255@s.whatsapp.net"
 						}
 					]
 				}
