@@ -294,7 +294,7 @@ const parseImageUrls = (mediaNode: BinaryNode) => {
 
     return {
         requested: swapCDN(requested),
-        original: original
+        original: swapCDN(original)
     }
 
 }
