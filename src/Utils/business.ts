@@ -277,12 +277,26 @@ export const uploadingNecessaryImages = async (
 	return results
 }
 
+const swapCDN = (url?: string) => {
+	if (!url) return url
+	return url.replace(
+		/https:\/\/media-[^\/]+\.cdn\.whatsapp\.net/gi,
+		"https://pps.whatsapp.net"
+	)
+}
+
 const parseImageUrls = (mediaNode: BinaryNode) => {
+    
 	const imgNode = getBinaryNodeChild(mediaNode, 'image')
-	return {
-		requested: getBinaryNodeChildString(imgNode, 'request_image_url')!,
-		original: getBinaryNodeChildString(imgNode, 'original_image_url')!
-	}
+    
+    const requested = getBinaryNodeChildString(imgNode, 'request_image_url')!
+    const original = getBinaryNodeChildString(imgNode, 'original_image_url')!
+
+    return {
+        requested: swapCDN(requested),
+        original: swapCDN(original)
+    }
+	
 }
 
 const parseStatusInfo = (mediaNode: BinaryNode): CatalogStatus => {
