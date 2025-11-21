@@ -56,6 +56,22 @@ import { USyncQuery, USyncUser } from '../WAUSync'
 import { makeSocket } from './socket.js'
 const MAX_SYNC_ATTEMPTS = 2
 
+function forceArray(nodes: any): BinaryNode[] {
+  if (!nodes) return [];
+
+  // Se veio string → não é um array de nodes
+  if (typeof nodes === "string") return [];
+
+  // Se veio buffer → não é array
+  if (nodes instanceof Uint8Array) return [];
+
+  // Se já é array → OK
+  if (Array.isArray(nodes)) return nodes as BinaryNode[];
+
+  // Caso inesperado
+  return [];
+}
+
 export const makeChatsSocket = (config: SocketConfig) => {
 	const {
 		logger,
@@ -369,7 +385,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 		})
 	}
 
-	const getBusinessProfile = async (jid: string): Promise<WABusinessProfile | void> => {
+	const getBusinessProfile = async (jid: string): Promise<any> => {
 		const results = await query({
 			tag: 'iq',
 			attrs: {
@@ -382,42 +398,93 @@ export const makeChatsSocket = (config: SocketConfig) => {
 					tag: 'business_profile',
 					attrs: { v: '244' },
 					content: [
-						{
-							tag: 'profile',
-							attrs: { jid }
-						}
+						{ tag: 'profile', attrs: { jid } }
 					]
 				}
 			]
-		})
+		});
 
-		const profileNode = getBinaryNodeChild(results, 'business_profile')
-		const profiles = getBinaryNodeChild(profileNode, 'profile')
-		if (profiles) {
-			const address = getBinaryNodeChild(profiles, 'address')
-			const description = getBinaryNodeChild(profiles, 'description')
-			const website = getBinaryNodeChild(profiles, 'website')
-			const email = getBinaryNodeChild(profiles, 'email')
-			const category = getBinaryNodeChild(getBinaryNodeChild(profiles, 'categories'), 'category')
-			const businessHours = getBinaryNodeChild(profiles, 'business_hours')
-			const businessHoursConfig = businessHours
-				? getBinaryNodeChildren(businessHours, 'business_hours_config')
-				: undefined
-			const websiteStr = website?.content?.toString()
-			return {
-				wid: profiles.attrs?.jid,
-				address: address?.content?.toString(),
-				description: description?.content?.toString() || '',
-				website: websiteStr ? [websiteStr] : [],
-				email: email?.content?.toString(),
-				category: category?.content?.toString(),
-				business_hours: {
-					timezone: businessHours?.attrs?.timezone,
-					business_config: businessHoursConfig?.map(({ attrs }) => attrs as unknown as WABusinessHoursConfig)
-				}
-			}
-		}
-	}
+		const profileNode = getBinaryNodeChild(results, 'business_profile');
+		const profile = getBinaryNodeChild(profileNode, 'profile');
+
+		if (!profile) return null;
+
+		// Helper para text nodes
+		const text = (tag: string) =>
+			getBinaryNodeChild(profile, tag)?.content?.toString() || null;
+
+		// Helper para arrays
+		const many = (tag: string, childTag: string) => {
+			const parent = getBinaryNodeChild(profile, tag);
+			const children = getBinaryNodeChildren(parent, childTag);
+
+			const safe = forceArray(children);
+
+			return safe
+				.filter((n: any) => typeof n === "object")
+				.map((node: any) => ({
+				tag: node.tag,
+				attrs: node.attrs,
+				content: node.content?.toString?.() || node.content
+				}));
+			};
+
+		// PEGAR CAMPOS OCULTOS DESCONHECIDOS
+		const rawExtraFields = Array.isArray(profile.content)
+			? profile.content
+				.filter((n: any) => typeof n === "object" && n.tag) // só nós válidos
+				.map((node: any) => ({
+					tag: node.tag,
+					attrs: node.attrs,
+					content:
+					typeof node.content === "string"
+						? node.content
+						: node.content?.toString?.() ||
+						node.content ||
+						null
+				}))
+			: [];
+
+
+		return {
+			wid: profile.attrs?.jid,
+
+			// CAMPOS PADRÃO
+			address: text('address'),
+			description: text('description'),
+			website: many('website', 'website'),
+			email: text('email'),
+			category: text('category'),
+
+			business_hours: (() => {
+				const hoursNode = getBinaryNodeChild(profile, 'business_hours');
+				if (!hoursNode) return null;
+
+				const configs = getBinaryNodeChildren(hoursNode, 'business_hours_config');
+				return {
+					timezone: hoursNode.attrs?.timezone,
+					business_config: configs.map(c => c.attrs)
+				};
+			})(),
+
+			// CAMPOS EXTRAS
+			about: text('about'),
+			vertical: text('vertical'),
+			profile_picture: text('profile_picture'),
+			cover_photo: text('cover_photo'),
+			cart_enabled: text('cart_enabled'),
+			onboarding_complete: text('onboarding_complete'),
+			is_catalog_visible: text('is_catalog_visible'),
+
+			additional_emails: many('additional_emails', 'email'),
+			additional_phones: many('additional_phones', 'phone'),
+
+			profile_completeness_score: text('profile_completeness_score'),
+
+			// RETORNO RAW DE TUDO QUE O WHATSAPP MANDAR
+			raw_extra_fields: rawExtraFields
+		};
+	};
 
 	const cleanDirtyBits = async (type: 'account_sync' | 'groups', fromTimestamp?: number | string) => {
 		logger.info({ fromTimestamp }, 'clean dirty bits ' + type)
