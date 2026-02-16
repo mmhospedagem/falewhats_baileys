@@ -112,7 +112,23 @@ export const toProductNode = (productId: string | undefined, product: ProductCre
 		})
 	}
 
-	if (product.images.length) {
+	if (typeof product.salePrice !== 'undefined') {
+		content.push({
+			tag: 'sale_price',
+			attrs: {},
+			content: Buffer.from(product.salePrice.toString())
+		})
+	}
+
+	if (typeof product.url !== 'undefined') {
+		content.push({
+			tag: 'url',
+			attrs: {},
+			content: Buffer.from(product.url)
+		})
+	}
+
+	if (product?.images?.length) {
 		content.push({
 			tag: 'media',
 			attrs: {},
@@ -141,22 +157,6 @@ export const toProductNode = (productId: string | undefined, product: ProductCre
 			tag: 'price',
 			attrs: {},
 			content: Buffer.from(product.price.toString())
-		})
-	}
-
-	if (typeof product.salePrice !== 'undefined') {
-		content.push({
-			tag: 'sale_price',
-			attrs: {},
-			content: Buffer.from(product.salePrice)
-		})
-	}
-
-	if (typeof product.url !== 'undefined') {
-		content.push({
-			tag: 'url',
-			attrs: {},
-			content: Buffer.from(product.url.toString())
 		})
 	}
 
@@ -205,6 +205,9 @@ export const parseProductNode = (productNode: BinaryNode) => {
 	const mediaNode = getBinaryNodeChild(productNode, 'media')!
 	const statusInfoNode = getBinaryNodeChild(productNode, 'status_info')!
 
+	const salePriceNode = getBinaryNodeChild(productNode, 'sale_price')
+	const salePriceNodeChild = getBinaryNodeChildString(salePriceNode, 'price')
+
 	const product: Product = {
 		id,
 		imageUrls: parseImageUrls(mediaNode),
@@ -217,6 +220,7 @@ export const parseProductNode = (productNode: BinaryNode) => {
 		url: getBinaryNodeChildString(productNode, 'url'),
 		description: getBinaryNodeChildString(productNode, 'description')!,
 		price: +getBinaryNodeChildString(productNode, 'price')!,
+		salePrice: salePriceNodeChild ? +salePriceNodeChild : undefined,
 		currency: getBinaryNodeChildString(productNode, 'currency')!,
 		isHidden
 	}
@@ -286,25 +290,11 @@ export const uploadingNecessaryImages = async (
 }
 
 const parseImageUrls = (mediaNode: BinaryNode) => {
-    
 	const imgNode = getBinaryNodeChild(mediaNode, 'image')
-
-    const requested = getBinaryNodeChildString(imgNode, 'request_image_url')
-    const original = getBinaryNodeChildString(imgNode, 'original_image_url')
-
-    const swapCDN = (url?: string) => {
-        if (!url) return ""
-        return url.replace(
-            /https:\/\/media-[^\/]+\.cdn\.whatsapp\.net/gi,
-            "https://pps.whatsapp.net"
-        )
-    }
-
-    return {
-        requested: swapCDN(requested),
-        original: swapCDN(original)
-    }
-
+	return {
+		requested: getBinaryNodeChildString(imgNode, 'request_image_url')!,
+		original: getBinaryNodeChildString(imgNode, 'original_image_url')!
+	}
 }
 
 const parseStatusInfo = (mediaNode: BinaryNode): CatalogStatus => {

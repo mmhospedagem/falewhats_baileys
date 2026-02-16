@@ -8,7 +8,12 @@ import type { CacheStore } from './Socket'
 
 // export the WAMessage Prototypes
 export { proto as WAProto }
-export type WAMessage = proto.IWebMessageInfo & { key: WAMessageKey; messageStubParameters?: any } & { category?: string }
+export type WAMessage = proto.IWebMessageInfo & {
+	key: WAMessageKey
+	messageStubParameters?: any
+	category?: string
+	retryCount?: number
+}
 export type WAMessageContent = proto.IMessage
 export type WAContactMessage = proto.Message.IContactMessage
 export type WAContactsArrayMessage = proto.Message.IContactsArrayMessage
@@ -136,6 +141,7 @@ type WithDimensions = {
 	height?: number
 }
 
+
 type Listable = {
 	/** Sections of the List */
 	sections?: proto.Message.ListMessage.ISection[]
@@ -146,7 +152,6 @@ type Listable = {
 	/** Text of the bnutton on the list (required) */
 	buttonText?: string
 	listType?: proto.Message.ListMessage.ListType
-
 }
 
 export type PollMessageOptions = {
@@ -181,46 +186,40 @@ type RequestPhoneNumber = {
 
 export type AnyMediaMessageContent = (
 	| ({
-	image: WAMediaUpload
-	caption?: string
-	jpegThumbnail?: string
-} & Mentionable &
-	Contextable &
-	Buttonable &
-	Templatable &
-	WithDimensions)
+			image: WAMediaUpload
+			caption?: string
+			jpegThumbnail?: string
+	  } & Mentionable &
+			Contextable &
+			WithDimensions)
 	| ({
-	video: WAMediaUpload
-	caption?: string
-	gifPlayback?: boolean
-	jpegThumbnail?: string
-	/** if set to true, will send as a `video note` */
-	ptv?: boolean
-} & Mentionable &
-	Contextable &
-	Buttonable &
-	Templatable &
-	WithDimensions)
+			video: WAMediaUpload
+			caption?: string
+			gifPlayback?: boolean
+			jpegThumbnail?: string
+			/** if set to true, will send as a `video note` */
+			ptv?: boolean
+	  } & Mentionable &
+			Contextable &
+			WithDimensions)
 	| {
-	audio: WAMediaUpload
-	/** if set to true, will send as a `voice note` */
-	ptt?: boolean
-	/** optionally tell the duration of the audio */
-	seconds?: number
-}
+			audio: WAMediaUpload
+			/** if set to true, will send as a `voice note` */
+			ptt?: boolean
+			/** optionally tell the duration of the audio */
+			seconds?: number
+	  }
 	| ({
-	sticker: WAMediaUpload
-	isAnimated?: boolean
-} & WithDimensions)
+			sticker: WAMediaUpload
+			isAnimated?: boolean
+	  } & WithDimensions)
 	| ({
-	document: WAMediaUpload
-	mimetype: string
-	fileName?: string
-	caption?: string
-} & Contextable &
-	Buttonable &
-	Templatable)
-	) & { mimetype?: string } & Editable
+			document: WAMediaUpload
+			mimetype: string
+			fileName?: string
+			caption?: string
+	  } & Contextable)
+) & { mimetype?: string } & Editable
 
 export type ButtonReplyInfo = {
 	displayText: string
@@ -242,75 +241,79 @@ export type WASendableProduct = Omit<proto.Message.ProductMessage.IProductSnapsh
 
 export type AnyRegularMessageContent = (
 	| ({
-	text: string
-	linkPreview?: WAUrlInfo | null
-} & Mentionable &
-	Contextable & Buttonable & Templatable & Listable &
-	Editable)
+			text: string
+			linkPreview?: WAUrlInfo | null
+	  } & Mentionable &
+			Contextable &
+			Buttonable &
+			Templatable &
+			Listable &
+			Editable)
 	| AnyMediaMessageContent
 	| { event: EventMessageOptions }
 	| ({
-	poll: PollMessageOptions
-} & Mentionable &
-	Contextable & Buttonable & Templatable &
-	Editable)
+			poll: PollMessageOptions
+	  } & Mentionable &
+			Contextable &
+			Editable)
 	| {
-	contacts: {
-		displayName?: string
-		contacts: proto.Message.IContactMessage[]
-	}
-}
+			contacts: {
+				displayName?: string
+				contacts: proto.Message.IContactMessage[]
+			}
+	  }
 	| {
-	location: WALocationMessage
-}
+			location: WALocationMessage
+	  }
 	| { react: proto.Message.IReactionMessage }
 	| {
-	buttonReply: ButtonReplyInfo
-	type: 'template' | 'plain'
-}
+			buttonReply: ButtonReplyInfo
+			type: 'template' | 'plain'
+	  }
 	| {
-	groupInvite: GroupInviteInfo
-}
+			groupInvite: GroupInviteInfo
+	  }
 	| {
-	listReply: Omit<proto.Message.IListResponseMessage, 'contextInfo'>
-}
+			listReply: Omit<proto.Message.IListResponseMessage, 'contextInfo'>
+	  }
 	| {
-	pin: WAMessageKey
-	type: proto.PinInChat.Type
-	/**
-	 * 24 hours, 7 days, 30 days
-	 */
-	time?: 86400 | 604800 | 2592000
-}
+			pin: WAMessageKey
+			type: proto.PinInChat.Type
+			/**
+			 * 24 hours, 7 days, 30 days
+			 */
+			time?: 86400 | 604800 | 2592000
+	  }
 	| {
-	product: WASendableProduct
-	businessOwnerJid?: string
-	body?: string
-	footer?: string
-}
+			product: WASendableProduct
+			businessOwnerJid?: string
+			body?: string
+			footer?: string
+	  }
 	| SharePhoneNumber
 	| RequestPhoneNumber
-	) &
+) &
 	ViewOnce
 
 export type AnyMessageContent =
 	| AnyRegularMessageContent
 	| {
-	forward: WAMessage
-	force?: boolean
-}
+			forward: WAMessage
+			force?: boolean
+	  }
 	| {
-	/** Delete your message or anyone's message in a group (admin required) */
-	delete: WAMessageKey
-}
+			/** Delete your message or anyone's message in a group (admin required) */
+			delete: WAMessageKey
+	  }
 	| {
-	disappearingMessagesInChat: boolean | number
-}
+			disappearingMessagesInChat: boolean | number
+	  }
 	| {
-	interactiveMessage: proto.Message.IInteractiveMessage
-}
-
-export type GroupMetadataParticipants = Pick<GroupMetadata, 'participants'>
+			limitSharing: boolean
+	  }
+	| {
+			interactiveMessage: proto.Message.IInteractiveMessage
+	  }
 
 type MinimalRelayOptions = {
 	/** override the message ID with a custom provided string */
@@ -372,6 +375,8 @@ export type MediaGenerationOptions = {
 	backgroundColor?: string
 
 	font?: number
+
+	width?: number
 }
 export type MessageContentGenerationOptions = MediaGenerationOptions & {
 	getUrlInfo?: (text: string) => Promise<WAUrlInfo | undefined>

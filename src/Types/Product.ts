@@ -30,7 +30,7 @@ export type ProductAvailability = 'in stock'
 export type ProductBase = {
 	name: string
 	retailerId?: string
-	salePrice?: string
+	salePrice?: string | number
 	url?: string
 	description: string
 	price: string | number

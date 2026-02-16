@@ -51,7 +51,6 @@ export type WABusinessHoursConfig = {
 }
 
 export type WABusinessProfile = {
-	isVerified: boolean
 	description: string
 	email: string | undefined
 	business_hours: {
@@ -60,11 +59,9 @@ export type WABusinessProfile = {
 		business_config?: WABusinessHoursConfig[]
 	}
 	website: string[]
-	customUrl: string | null
 	category?: string
 	wid?: string
 	address?: string
-	join: string | null
 }
 
 export type CurveKeyPair = { private: Uint8Array; public: Uint8Array }

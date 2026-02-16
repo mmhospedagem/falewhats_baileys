@@ -1,35 +1,10 @@
 import { Boom } from '@hapi/boom'
 import NodeCache from '@cacheable/node-cache'
 import readline from 'readline'
-import makeWASocket, {
-	AnyMessageContent,
-	BinaryInfo,
-	CacheStore,
-	decryptEventResponse,
-	delay,
-	DisconnectReason,
-	downloadAndProcessHistorySyncNotification,
-	encodeWAM,
-	fetchLatestBaileysVersion,
-	generateWAMessageFromContent,
-	getAggregateVotesInPollMessage,
-	getHistoryMsg,
-	isJidNewsletter,
-	jidDecode,
-	makeCacheableSignalKeyStore,
-	normalizeMessageContent,
-	PatchedMessageWithRecipientJID,
-	proto,
-	useMultiFileAuthState,
-	WAMessageContent,
-	WAMessageKey
-} from '../src'
-//import MAIN_LOGGER from '../src/Utils/logger'
-import open from 'open'
-import fs from 'fs'
+import makeWASocket, { CacheStore, DEFAULT_CONNECTION_CONFIG,
+	delay, DisconnectReason, fetchLatestBaileysVersion, generateMessageIDV2, getAggregateVotesInPollMessage, isJidNewsletter, makeCacheableSignalKeyStore, proto, useMultiFileAuthState, WAMessageContent, WAMessageKey } from '../src'
 import P from 'pino'
-import { buttons, review_and_pay } from './buttons'
-import { en } from 'typedoc-plugin-markdown/dist/internationalization'
+import { randomBytes } from 'crypto'
 
 const logger = P({
   level: "trace",
@@ -38,17 +13,17 @@ const logger = P({
       {
         target: "pino-pretty", // pretty-print for console
         options: { colorize: true },
-        level: "error",
+        level: "trace",
       },
       {
         target: "pino/file", // raw file output
         options: { destination: './wa-logs.txt' },
-        level: "error",
+        level: "trace",
       },
     ],
   },
 })
-logger.level = 'error'
+logger.level = 'trace'
 
 const doReplies = process.argv.includes('--do-reply')
 const usePairingCode = process.argv.includes('--use-pairing-code')
@@ -66,13 +41,18 @@ const question = (text: string) => new Promise<string>((resolve) => rl.question(
 // start a connection
 const startSock = async() => {
 	const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info')
+	// NOTE: For unit testing purposes only
+	if (process.env.ADV_SECRET_KEY) {
+		state.creds.advSecretKey = process.env.ADV_SECRET_KEY
+	}
 	// fetch latest version of WA Web
 	const { version, isLatest } = await fetchLatestBaileysVersion()
-	console.log(`using WA v${version.join('.')}, isLatest: ${isLatest}`)
+	logger.debug({version: version.join('.'), isLatest}, `using latest WA version`)
 
 	const sock = makeWASocket({
 		version,
 		logger,
+		waWebSocketUrl: process.env.SOCKET_URL ?? DEFAULT_CONNECTION_CONFIG.waWebSocketUrl,
 		auth: {
 			creds: state.creds,
 			/** caching makes the store faster to send/recv messages */
@@ -87,27 +67,6 @@ const startSock = async() => {
 		getMessage
 	})
 
-
-	// Pairing code for Web clients
-	if (usePairingCode && !sock.authState.creds.registered) {
-		// todo move to QR event
-		const phoneNumber = await question('Please enter your phone number:\n')
-		const code = await sock.requestPairingCode(phoneNumber)
-		console.log(`Pairing code: ${code}`)
-	}
-
-	const sendMessageWTyping = async(msg: AnyMessageContent, jid: string) => {
-		await sock.presenceSubscribe(jid)
-		await delay(500)
-
-		await sock.sendPresenceUpdate('composing', jid)
-		await delay(2000)
-
-		await sock.sendPresenceUpdate('paused', jid)
-
-		await sock.sendMessage(jid, msg)
-	}
-
 	// the process function lets you process all events that just occurred
 	// efficiently in a batch
 	sock.ev.process(
@@ -117,158 +76,150 @@ const startSock = async() => {
 			// maybe it closed, or we received all offline message or connection opened
 			if(events['connection.update']) {
 				const update = events['connection.update']
-				const { connection, lastDisconnect } = update
+				const { connection, lastDisconnect, qr } = update
 				if(connection === 'close') {
 					// reconnect if not logged out
 					if((lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut) {
 						startSock()
 					} else {
-						console.log('Connection closed. You are logged out.')
+						logger.fatal('Connection closed. You are logged out.')
 					}
 				}
-				console.log('connection update', update)
+
+				if (qr) {
+					// Pairing code for Web clients
+					if (usePairingCode && !sock.authState.creds.registered) {
+						const phoneNumber = await question('Please enter your phone number:\n')
+						const code = await sock.requestPairingCode(phoneNumber)
+						console.log(`Pairing code: ${code}`)
+					}
+				}
+
+				logger.debug(update, 'connection update')
 			}
 
 			// credentials updated -- save them
-			// if(events['creds.update']) {
-			// 	await saveCreds()
-			// }
-			//
-			// if(events['labels.association']) {
-			// 	console.log(events['labels.association'])
-			// }
-			//
-			//
-			// if(events['labels.edit']) {
-			// 	console.log(events['labels.edit'])
-			// }
+			if(events['creds.update']) {
+				await saveCreds()
+				logger.debug({}, 'creds save triggered')
+			}
 
-			if(events.call) {
-				console.log('recv call event', events.call)
+			if(events['labels.association']) {
+				logger.debug(events['labels.association'], 'labels.association event fired')
+			}
+
+
+			if(events['labels.edit']) {
+				logger.debug(events['labels.edit'], 'labels.edit event fired')
+			}
+
+			if(events['call']) {
+				logger.debug(events['call'], 'call event fired')
 			}
 
 			// history received
 			if(events['messaging-history.set']) {
 				const { chats, contacts, messages, isLatest, progress, syncType } = events['messaging-history.set']
 				if (syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) {
-					console.log('received on-demand history sync, messages=', messages)
+					logger.debug(messages, 'received on-demand history sync')
 				}
-				console.log(`recv ${chats.length} chats, ${contacts.length} contacts, ${messages.length} msgs (is latest: ${isLatest}, progress: ${progress}%), type: ${syncType}`)
+				logger.debug({contacts: contacts.length, chats: chats.length, messages: messages.length, isLatest, progress, syncType: syncType?.toString() }, 'messaging-history.set event fired')
 			}
 
 			// received a new message
       if (events['messages.upsert']) {
         const upsert = events['messages.upsert']
+        logger.debug(upsert, 'messages.upsert fired')
 
         if (!!upsert.requestId) {
-          console.log("placeholder message received for request of id=" + upsert.requestId, upsert)
+          logger.debug(upsert, 'placeholder request message received')
         }
 
 
 
         if (upsert.type === 'notify') {
           for (const msg of upsert.messages) {
-						console.log('Received: ', JSON.stringify(msg, undefined, 2))
             if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
               const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text
               if (text == "requestPlaceholder" && !upsert.requestId) {
                 const messageId = await sock.requestPlaceholderResend(msg.key)
-                console.log('requested placeholder resync, id=', messageId)
+								logger.debug({ id: messageId }, 'requested placeholder resync')
               }
 
               // go to an old chat and send this
               if (text == "onDemandHistSync") {
                 const messageId = await sock.fetchMessageHistory(50, msg.key, msg.messageTimestamp!)
-                console.log('requested on-demand sync, id=', messageId)
+                logger.debug({ id: messageId }, 'requested on-demand history resync')
               }
 
               if (!msg.key.fromMe && doReplies && !isJidNewsletter(msg.key?.remoteJid!)) {
-
-                console.log('replying to', msg.key.remoteJid)
-                await sock!.readMessages([msg.key])
-                await sendMessageWTyping({ text: 'Hello there!' }, msg.key.remoteJid!)
+              	const id = generateMessageIDV2(sock.user?.id)
+              	logger.debug({id, orig_id: msg.key.id }, 'replying to message')
+                await sock.sendMessage(msg.key.remoteJid!, { text: 'pong '+msg.key.id }, {messageId: id })
               }
-							console.log('IsEvent: ', !!msg.message?.encEventResponseMessage)
-							console.log('Event: ', JSON.stringify(msg.message?.encEventResponseMessage, undefined, 2))
             }
-						if(msg.message?.encEventResponseMessage) {
-							try {
-								console.log('try')
-								const enc = msg.message.encEventResponseMessage!
-								const d = decryptEventResponse(
-									{ encPayload: enc.encPayload, encIv: enc.encIv },
-									{
-										eventCreatorJid: enc.eventCreationMessageKey!.remoteJid!,
-										eventMsgId: enc.eventCreationMessageKey!.id!,
-										eventEncKey: Uint8Array.from(Buffer.from('KmQK6m3jVZYo2MRqax45y9bRYZn54+7tydzUQNSgTBc=', 'base64')),
-										responderJid: msg.key.remoteJid!,
-									}
-								)
-
-								console.log('Resposta do Evento:', proto.Message.EventResponseMessage.EventResponseType[d.response!])
-							} catch (e) {
-								console.log('catch')
-								logger.error(e)
-							}
-						}
           }
         }
       }
 
 			// messages updated like status delivered, message deleted etc.
-		// 	if(events['messages.update']) {
-		// 		console.log(
-		// 			JSON.stringify(events['messages.update'], undefined, 2)
-		// 		)
-		//
-		// 		for(const { key, update } of events['messages.update']) {
-		// 			if(update.pollUpdates) {
-		// 				const pollCreation: proto.IMessage = {} // get the poll creation message somehow
-		// 				if(pollCreation) {
-		// 					console.log(
-		// 						'got poll update, aggregation: ',
-		// 						getAggregateVotesInPollMessage({
-		// 							message: pollCreation,
-		// 							pollUpdates: update.pollUpdates,
-		// 						})
-		// 					)
-		// 				}
-		// 			}
-		// 		}
-		// 	}
-		//
-		// 	if(events['message-receipt.update']) {
-		// 		console.log(events['message-receipt.update'])
-		// 	}
-		//
-		// 	if(events['messages.reaction']) {
-		// 		console.log(events['messages.reaction'])
-		// 	}
-		//
-		// 	if(events['presence.update']) {
-		// 		console.log(events['presence.update'])
-		// 	}
-		//
-		// 	if(events['chats.update']) {
-		// 		console.log(events['chats.update'])
-		// 	}
-		//
-		// 	if(events['contacts.update']) {
-		// 		for(const contact of events['contacts.update']) {
-		// 			if(typeof contact.imgUrl !== 'undefined') {
-		// 				const newUrl = contact.imgUrl === null
-		// 					? null
-		// 					: await sock!.profilePictureUrl(contact.id!).catch(() => null)
-		// 				console.log(
-		// 					`contact ${contact.id} has a new profile pic: ${newUrl}`,
-		// 				)
-		// 			}
-		// 		}
-		// 	}
-		//
-		// 	if(events['chats.delete']) {
-		// 		console.log('chats deleted ', events['chats.delete'])
-		// 	}
+			if(events['messages.update']) {
+				logger.debug(events['messages.update'], 'messages.update fired')
+
+				for(const { key, update } of events['messages.update']) {
+					if(update.pollUpdates) {
+						const pollCreation: proto.IMessage = {} // get the poll creation message somehow
+						if(pollCreation) {
+							console.log(
+								'got poll update, aggregation: ',
+								getAggregateVotesInPollMessage({
+									message: pollCreation,
+									pollUpdates: update.pollUpdates,
+								})
+							)
+						}
+					}
+				}
+			}
+
+			if(events['message-receipt.update']) {
+				logger.debug(events['message-receipt.update'])
+			}
+
+			if (events['contacts.upsert']) {
+				logger.debug(events['message-receipt.update'])
+			}
+
+			if(events['messages.reaction']) {
+				logger.debug(events['messages.reaction'])
+			}
+
+			if(events['presence.update']) {
+				logger.debug(events['presence.update'])
+			}
+
+			if(events['chats.update']) {
+				logger.debug(events['chats.update'])
+			}
+
+			if(events['contacts.update']) {
+				for(const contact of events['contacts.update']) {
+					if(typeof contact.imgUrl !== 'undefined') {
+						const newUrl = contact.imgUrl === null
+							? null
+							: await sock!.profilePictureUrl(contact.id!).catch(() => null)
+						logger.debug({id: contact.id, newUrl}, `contact has a new profile pic` )
+					}
+				}
+			}
+
+			if(events['chats.delete']) {
+				logger.debug('chats deleted ', events['chats.delete'])
+			}
+
+			if(events['group.member-tag.update']) {
+				logger.debug('group member tag update', JSON.stringify(events['group.member-tag.update'], undefined, 2))
+			}
 		}
 	)
 
@@ -285,49 +236,37 @@ const startSock = async() => {
 
 startSock()
 	.then(async sock => {
-		await delay(5000)
+		await delay(2000)
 		const jid = '553197853327@s.whatsapp.net'
-
-		// const interactiveMessage: proto.Message.IInteractiveMessage = {
-		// 	body: {
-		// 		text: 'Code :' + Date.now()
-		// 	},
-		// 	header: {
-		// 		hasMediaAttachment: false,
-		// 		// imageMessage: up.imageMessage
-		// 	},
-		// 	footer: {
-		// 		text: 'CodeChat®'
-		// 	},
-		// 	nativeFlowMessage: {
-		// 		buttons: [review_and_pay]
-		// 	}
-		// }
-
-		const startDate = new Date()
-		startDate.setHours(startDate.getHours() + 1)
-		const endDate = new Date(startDate.getTime());
-		endDate.setHours(endDate.getHours() + 1);
-
-		// node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-		const hash = 'KmQK6m3jVZYo2MRqax45y9bRYZn54+7tydzUQNSgTBc='
+		const ownJid = '553195918699@s.whatsapp.net'
+		const ownLid = '153115802226704@lid'
 
 		await sock.sendMessage(jid, {
-			event: {
-				name: 'CodeChat',
-				description: 'Decrypt Event',
-				startDate,
-				endDate,
-				call: 'video',
-				location: {
-					name: 'Escritório',
-					address: 'Endereço completo',
-					degreesLongitude: 0,
-					degreesLatitude: 0
+			interactiveMessage: {
+				body: {
+					text: 'Texto'
 				},
-				messageSecret: Uint8Array.from(Buffer.from(hash, 'base64'))
+				footer: {
+					text: 'Roda pé'
+				},
+				nativeFlowMessage: {
+					buttons: [
+						{
+							name: 'quick_reply',
+							buttonParamsJson: JSON.stringify({
+								display_text: 'Botão 1',
+								id: randomBytes(32).toString('base64'),
+							})
+						},
+						{
+							name: 'quick_reply',
+							buttonParamsJson: JSON.stringify({
+								display_text: 'Botão 2',
+								id: randomBytes(32).toString('base64'),
+							})
+						}
+					]
+				}
 			}
 		})
-		console.log('---------------------SEND MESSAGE-----------------------')
 	})
-	.catch(error => logger.error(error))

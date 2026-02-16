@@ -17,14 +17,13 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 	const sock = makeMessagesRecvSocket(config)
 	const { authState, query, waUploadToServer } = sock
 
-	const updateBussinesProfile = async (args: UpdateBussinesProfileProps) => {
-		
+	const updateBusinessProfile = async (args: UpdateBussinesProfileProps) => {
 		const node: BinaryNode[] = []
 		const simpleFields: (keyof UpdateBussinesProfileProps)[] = ['address', 'email', 'description']
 
 		node.push(
 			...simpleFields
-				.filter(key => args[key])
+				.filter(key => args[key] !== undefined && args[key] !== null)
 				.map(key => ({
 					tag: key,
 					attrs: {},
@@ -32,7 +31,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 				}))
 		)
 
-		if (args.websites) {
+		if (args.websites !== undefined) {
 			node.push(
 				...args.websites.map(website => ({
 					tag: 'website',
@@ -42,23 +41,26 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 			)
 		}
 
-		if (args.hours) {
+		if (args.hours !== undefined) {
 			node.push({
 				tag: 'business_hours',
 				attrs: { timezone: args.hours.timezone },
-				content: args.hours.days.map(config => {
+				content: args.hours.days.map(dayConfig => {
 					const base = {
 						tag: 'business_hours_config',
-						attrs: { day_of_week: config.day, mode: config.mode }
-					}
+						attrs: {
+							day_of_week: dayConfig.day,
+							mode: dayConfig.mode
+						}
+					} as const
 
-					if (config.mode === 'specific_hours') {
+					if (dayConfig.mode === 'specific_hours') {
 						return {
 							...base,
 							attrs: {
 								...base.attrs,
-								open_time: config.openTimeInMinutes,
-								close_time: config.closeTimeInMinutes
+								open_time: dayConfig.openTimeInMinutes,
+								close_time: dayConfig.closeTimeInMinutes
 							}
 						}
 					}
@@ -152,101 +154,6 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		})
 	}
 
-	const getCollections = async (jid?: string, limit = 51) => {
-		jid = jid || authState.creds.me?.id
-		jid = jidNormalizedUser(jid)
-		const result = await query({
-			tag: 'iq',
-			attrs: {
-				to: S_WHATSAPP_NET,
-				type: 'get',
-				xmlns: 'w:biz:catalog',
-				smax_id: '35'
-			},
-			content: [
-				{
-					tag: 'collections',
-					attrs: {
-						biz_jid: jid
-					},
-					content: [
-						{
-							tag: 'collection_limit',
-							attrs: {},
-							content: Buffer.from(limit.toString())
-						},
-						{
-							tag: 'item_limit',
-							attrs: {},
-							content: Buffer.from(limit.toString())
-						},
-						{
-							tag: 'width',
-							attrs: {},
-							content: Buffer.from('100')
-						},
-						{
-							tag: 'height',
-							attrs: {},
-							content: Buffer.from('100')
-						}
-					]
-				}
-			]
-		})
-
-		return parseCollectionsNode(result)
-	}
-
-	const createCollection = async (
-		args: { 
-			name: string; 
-			products: string[]; 
-		}
-	) => {
-
-		
-		const productNodes = args.products.map(id => ({
-			tag: "id",
-			attrs: {},
-			content: Buffer.from(id)
-		}));
-
-		const result = await query({
-			tag: 'iq',
-			attrs: {
-				to: S_WHATSAPP_NET,
-				type: 'set',
-				xmlns: 'w:biz:catalog'
-			},
-			content: [
-				{
-					tag: 'collection',
-					attrs: {},
-					content: [
-						{
-							tag: 'name',
-							attrs: {},
-							content: Buffer.from(args.name)
-						},
-						{
-							tag: 'product_ids',
-							attrs: {},
-							content: productNodes
-						},
-						{
-							tag: 'biz_jid',
-							attrs: {},
-							content: "556231425255@s.whatsapp.net"
-						}
-					]
-				}
-			]
-		});
-
-		return getBinaryNodeChild(result, 'collection_add');
-	};
-
 	const getCatalog = async ({ jid, limit, cursor }: GetCatalogOptions) => {
 		jid = jid || authState.creds.me?.id
 		jid = jidNormalizedUser(jid)
@@ -296,6 +203,52 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 			]
 		})
 		return parseCatalogNode(result)
+	}
+
+	const getCollections = async (jid?: string, limit = 51) => {
+		jid = jid || authState.creds.me?.id
+		jid = jidNormalizedUser(jid)
+		const result = await query({
+			tag: 'iq',
+			attrs: {
+				to: S_WHATSAPP_NET,
+				type: 'get',
+				xmlns: 'w:biz:catalog',
+				smax_id: '35'
+			},
+			content: [
+				{
+					tag: 'collections',
+					attrs: {
+						biz_jid: jid
+					},
+					content: [
+						{
+							tag: 'collection_limit',
+							attrs: {},
+							content: Buffer.from(limit.toString())
+						},
+						{
+							tag: 'item_limit',
+							attrs: {},
+							content: Buffer.from(limit.toString())
+						},
+						{
+							tag: 'width',
+							attrs: {},
+							content: Buffer.from('100')
+						},
+						{
+							tag: 'height',
+							attrs: {},
+							content: Buffer.from('100')
+						}
+					]
+				}
+			]
+		})
+
+		return parseCollectionsNode(result)
 	}
 
 	const getOrderDetails = async (orderId: string, tokenBase64: string) => {
@@ -461,11 +414,10 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		getOrderDetails,
 		getCatalog,
 		getCollections,
-		createCollection,
 		productCreate,
 		productDelete,
 		productUpdate,
-		updateBussinesProfile,
+		updateBusinessProfile,
 		updateCoverPhoto,
 		removeCoverPhoto
 	}

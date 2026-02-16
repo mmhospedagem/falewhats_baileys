@@ -43,6 +43,7 @@ import {
 } from '../Utils'
 import { makeMutex } from '../Utils/make-mutex'
 import processMessage from '../Utils/process-message'
+import { buildTcTokenFromJid } from '../Utils/tc-token-utils'
 import {
 	type BinaryNode,
 	getBinaryNodeChild,
@@ -67,13 +68,33 @@ export const makeChatsSocket = (config: SocketConfig) => {
 		getMessage
 	} = config
 	const sock = makeSocket(config)
-	const { ev, ws, authState, generateMessageTag, sendNode, query, signalRepository, onUnexpectedError } = sock
+	const {
+		ev,
+		ws,
+		authState,
+		generateMessageTag,
+		sendNode,
+		query,
+		signalRepository,
+		onUnexpectedError,
+		sendUnifiedSession
+	} = sock
 
 	let privacySettings: { [_: string]: string } | undefined
 
 	let syncState: SyncState = SyncState.Connecting
-	/** this mutex ensures that the notifications (receipts, messages etc.) are processed in order */
-	const processingMutex = makeMutex()
+
+	/** this mutex ensures that messages are processed in order */
+	const messageMutex = makeMutex()
+
+	/** this mutex ensures that receipts are processed in order */
+	const receiptMutex = makeMutex()
+
+	/** this mutex ensures that app state patches are processed in order */
+	const appStatePatchMutex = makeMutex()
+
+	/** this mutex ensures that notifications are processed in order */
+	const notificationMutex = makeMutex()
 
 	// Timeout for AwaitingInitialSync state
 	let awaitingSyncTimeout: NodeJS.Timeout | undefined
@@ -404,45 +425,17 @@ export const makeChatsSocket = (config: SocketConfig) => {
 				? getBinaryNodeChildren(businessHours, 'business_hours_config')
 				: undefined
 			const websiteStr = website?.content?.toString()
-
-			const memberSinceTextNode = getBinaryNodeChild(profiles, 'member_since_text')
-			const joined = memberSinceTextNode?.content?.toString() ?? null
-
-			const customUrlChild = getBinaryNodeChild(profiles, 'custom_url')
-			const customUrl = customUrlChild?.content?.toString() ?? null
-
-			const rawExtraFields =
-				Array.isArray(profiles.content)
-					? profiles.content
-						.filter((n: any) => typeof n === "object" && n !== null)
-						.map((node: any) => ({
-							tag: node.tag,
-							attrs: node.attrs,
-							content:
-								typeof node.content === "string"
-									? node.content
-									: node.content?.toString?.() || null
-						}))
-					: [];
-
-			const identity = rawExtraFields.find(f => f.tag === "biz_identity_info");
-
-			const isVerified = identity?.attrs?.vlevel === "high" &&
-                   identity?.attrs?.is_signed === "true";
-
 			return {
-				isVerified: isVerified,
+				wid: profiles.attrs?.jid,
 				address: address?.content?.toString(),
 				description: description?.content?.toString() || '',
 				website: websiteStr ? [websiteStr] : [],
-				customUrl: "https://wa.me/" + customUrl,
 				email: email?.content?.toString(),
 				category: category?.content?.toString(),
 				business_hours: {
 					timezone: businessHours?.attrs?.timezone,
 					business_config: businessHoursConfig?.map(({ attrs }) => attrs as unknown as WABusinessHoursConfig)
-				},
-				join: joined
+				}
 			}
 		}
 	}
@@ -630,7 +623,10 @@ export const makeChatsSocket = (config: SocketConfig) => {
 	 * type = "image for the high res picture"
 	 */
 	const profilePictureUrl = async (jid: string, type: 'preview' | 'image' = 'preview', timeoutMs?: number) => {
-		// TOOD: Add support for tctoken, existingID, and newsletter + group options
+		const baseContent: BinaryNode[] = [{ tag: 'picture', attrs: { type, query: 'url' } }]
+
+		const tcTokenContent = await buildTcTokenFromJid({ authState, jid, baseContent })
+
 		jid = jidNormalizedUser(jid)
 		const result = await query(
 			{
@@ -641,7 +637,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 					type: 'get',
 					xmlns: 'w:profile:picture'
 				},
-				content: [{ tag: 'picture', attrs: { type, query: 'url' } }]
+				content: tcTokenContent
 			},
 			timeoutMs
 		)
@@ -673,13 +669,18 @@ export const makeChatsSocket = (config: SocketConfig) => {
 
 	const sendPresenceUpdate = async (type: WAPresence, toJid?: string) => {
 		const me = authState.creds.me!
-		if (type === 'available' || type === 'unavailable') {
+		const isAvailableType = type === 'available'
+		if (isAvailableType || type === 'unavailable') {
 			if (!me.name) {
 				logger.warn('no name present, ignoring presence update request...')
 				return
 			}
 
-			ev.emit('connection.update', { isOnline: type === 'available' })
+			ev.emit('connection.update', { isOnline: isAvailableType })
+
+			if (isAvailableType) {
+				void sendUnifiedSession()
+			}
 
 			await sendNode({
 				tag: 'presence',
@@ -712,24 +713,19 @@ export const makeChatsSocket = (config: SocketConfig) => {
 	 * @param toJid the jid to subscribe to
 	 * @param tcToken token for subscription, use if present
 	 */
-	const presenceSubscribe = (toJid: string, tcToken?: Buffer) =>
-		sendNode({
+	const presenceSubscribe = async (toJid: string) => {
+		const tcTokenContent = await buildTcTokenFromJid({ authState, jid: toJid })
+
+		return sendNode({
 			tag: 'presence',
 			attrs: {
 				to: toJid,
 				id: generateMessageTag(),
 				type: 'subscribe'
 			},
-			content: tcToken
-				? [
-						{
-							tag: 'tctoken',
-							attrs: {},
-							content: tcToken
-						}
-					]
-				: undefined
+			content: tcTokenContent
 		})
+	}
 
 	const handlePresenceUpdate = ({ tag, attrs, content }: BinaryNode) => {
 		let presence: PresenceData | undefined
@@ -776,7 +772,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 		let initial: LTHashState
 		let encodeResult: { patch: proto.ISyncdPatch; state: LTHashState }
 
-		await processingMutex.mutex(async () => {
+		await appStatePatchMutex.mutex(async () => {
 			await authState.keys.transaction(async () => {
 				logger.debug({ patch: patchCreate }, 'applying app patch')
 
@@ -1204,11 +1200,22 @@ export const makeChatsSocket = (config: SocketConfig) => {
 		}, 20_000)
 	})
 
+	ev.on('lid-mapping.update', async ({ lid, pn }) => {
+		try {
+			await signalRepository.lidMapping.storeLIDPNMappings([{ lid, pn }])
+		} catch (error) {
+			logger.warn({ lid, pn, error }, 'Failed to store LID-PN mapping')
+		}
+	})
+
 	return {
 		...sock,
 		createCallLink,
 		getBotListV2,
-		processingMutex,
+		messageMutex,
+		receiptMutex,
+		appStatePatchMutex,
+		notificationMutex,
 		fetchPrivacySettings,
 		upsertMessage,
 		appPatch,

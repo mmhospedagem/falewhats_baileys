@@ -27,7 +27,7 @@ import type {
 	WATextMessage
 } from '../Types'
 import { WAMessageStatus, WAProto } from '../Types'
-import { isJidGroup, isJidNewsletter, isJidStatusBroadcast, jidNormalizedUser } from '../WABinary'
+import { type BinaryNode, isJidGroup, isJidNewsletter, isJidStatusBroadcast, jidNormalizedUser } from '../WABinary'
 import { sha256 } from './crypto'
 import { generateMessageIDV2, getKeyAuthor, unixTimestampSeconds } from './generics'
 import type { ILogger } from './logger'
@@ -40,6 +40,14 @@ import {
 	getRawMediaUploadData,
 	type MediaDownloadOptions
 } from './messages-media'
+import { shouldIncludeReportingToken } from './reporting-utils'
+
+type ExtractByKey<T, K extends PropertyKey> = T extends Record<K, any> ? T : never
+type RequireKey<T, K extends keyof T> = T & {
+	[P in K]-?: Exclude<T[P], null | undefined>
+}
+
+type WithKey<T, K extends PropertyKey> = T extends unknown ? (K extends keyof T ? RequireKey<T, K> : never) : never
 
 type MediaUploadData = {
 	media: WAMediaUpload
@@ -73,8 +81,6 @@ const MessageTypeProto = {
 	sticker: WAProto.Message.StickerMessage,
 	document: WAProto.Message.DocumentMessage
 } as const
-
-const ButtonType = proto.Message.ButtonsMessage.HeaderType
 
 /**
  * Uses a regex to test whether the string contains a URL, and returns the URL if it does.
@@ -368,12 +374,29 @@ export const generateForwardMessageContent = (message: WAMessage, forceForward?:
 	return content
 }
 
+export const hasNonNullishProperty = <K extends PropertyKey>(
+	message: AnyMessageContent,
+	key: K
+): message is ExtractByKey<AnyMessageContent, K> => {
+	return (
+		typeof message === 'object' &&
+		message !== null &&
+		key in message &&
+		(message as any)[key] !== null &&
+		(message as any)[key] !== undefined
+	)
+}
+
+function hasOptionalProperty<T, K extends PropertyKey>(obj: T, key: K): obj is WithKey<T, K> {
+	return typeof obj === 'object' && obj !== null && key in obj && (obj as any)[key] !== null
+}
+
 export const generateWAMessageContent = async (
 	message: AnyMessageContent,
 	options: MessageContentGenerationOptions
 ) => {
 	let m: WAMessageContent = {}
-	if ('text' in message) {
+	if (hasNonNullishProperty(message, 'text')) {
 		const extContent = { text: message.text } as WATextMessage
 
 		let urlInfo = message.linkPreview
@@ -409,7 +432,7 @@ export const generateWAMessageContent = async (
 		}
 
 		m.extendedTextMessage = extContent
-	} else if ('contacts' in message) {
+	} else if (hasNonNullishProperty(message, 'contacts')) {
 		const contactLen = message.contacts.contacts.length
 		if (!contactLen) {
 			throw new Boom('require atleast 1 contact', { statusCode: 400 })
@@ -420,22 +443,22 @@ export const generateWAMessageContent = async (
 		} else {
 			m.contactsArrayMessage = WAProto.Message.ContactsArrayMessage.create(message.contacts)
 		}
-	} else if ('location' in message) {
+	} else if (hasNonNullishProperty(message, 'location')) {
 		m.locationMessage = WAProto.Message.LocationMessage.create(message.location)
-	} else if ('react' in message) {
+	} else if (hasNonNullishProperty(message, 'react')) {
 		if (!message.react.senderTimestampMs) {
 			message.react.senderTimestampMs = Date.now()
 		}
 
 		m.reactionMessage = WAProto.Message.ReactionMessage.create(message.react)
-	} else if ('delete' in message) {
+	} else if (hasNonNullishProperty(message, 'delete')) {
 		m.protocolMessage = {
 			key: message.delete,
 			type: WAProto.Message.ProtocolMessage.Type.REVOKE
 		}
-	} else if ('forward' in message) {
+	} else if (hasNonNullishProperty(message, 'forward')) {
 		m = generateForwardMessageContent(message.forward, message.force)
-	} else if ('disappearingMessagesInChat' in message) {
+	} else if (hasNonNullishProperty(message, 'disappearingMessagesInChat')) {
 		const exp =
 			typeof message.disappearingMessagesInChat === 'boolean'
 				? message.disappearingMessagesInChat
@@ -443,7 +466,7 @@ export const generateWAMessageContent = async (
 					: 0
 				: message.disappearingMessagesInChat
 		m = prepareDisappearingMessageSettingContent(exp)
-	} else if ('groupInvite' in message) {
+	} else if (hasNonNullishProperty(message, 'groupInvite')) {
 		m.groupInviteMessage = {}
 		m.groupInviteMessage.inviteCode = message.groupInvite.inviteCode
 		m.groupInviteMessage.inviteExpiration = message.groupInvite.inviteExpiration
@@ -463,7 +486,7 @@ export const generateWAMessageContent = async (
 				}
 			}
 		}
-	} else if ('pin' in message) {
+	} else if (hasNonNullishProperty(message, 'pin')) {
 		m.pinInChatMessage = {}
 		m.messageContextInfo = {}
 
@@ -472,7 +495,7 @@ export const generateWAMessageContent = async (
 		m.pinInChatMessage.senderTimestampMs = Date.now()
 
 		m.messageContextInfo.messageAddOnDurationInSecs = message.type === 1 ? message.time || 86400 : 0
-	} else if ('buttonReply' in message) {
+	} else if (hasNonNullishProperty(message, 'buttonReply')) {
 		switch (message.type) {
 			case 'template':
 				m.templateButtonReplyMessage = {
@@ -489,10 +512,10 @@ export const generateWAMessageContent = async (
 				}
 				break
 		}
-	} else if ('ptv' in message && message.ptv) {
+	} else if (hasOptionalProperty(message, 'ptv') && message.ptv) {
 		const { videoMessage } = await prepareWAMessageMedia({ video: message.video }, options)
 		m.ptvMessage = videoMessage
-	} else if ('product' in message) {
+	} else if (hasNonNullishProperty(message, 'product')) {
 		const { imageMessage } = await prepareWAMessageMedia({ image: message.product.productImage }, options)
 		m.productMessage = WAProto.Message.ProductMessage.create({
 			...message,
@@ -501,9 +524,9 @@ export const generateWAMessageContent = async (
 				productImage: imageMessage
 			}
 		})
-	} else if ('listReply' in message) {
+	} else if (hasNonNullishProperty(message, 'listReply')) {
 		m.listResponseMessage = { ...message.listReply }
-	} else if ('event' in message) {
+	} else if (hasNonNullishProperty(message, 'event')) {
 		m.eventMessage = {}
 		const startTime = Math.floor(message.event.startDate.getTime() / 1000)
 
@@ -525,7 +548,7 @@ export const generateWAMessageContent = async (
 		m.eventMessage.extraGuestsAllowed = message.event.extraGuestsAllowed
 		m.eventMessage.isScheduleCall = message.event.isScheduleCall ?? false
 		m.eventMessage.location = message.event.location
-	} else if ('poll' in message) {
+	} else if (hasNonNullishProperty(message, 'poll')) {
 		message.poll.selectableCount ||= 0
 		message.poll.toAnnouncementGroup ||= false
 
@@ -562,13 +585,13 @@ export const generateWAMessageContent = async (
 				m.pollCreationMessage = pollCreationMessage
 			}
 		}
-	} else if ('sharePhoneNumber' in message) {
+	} else if (hasNonNullishProperty(message, 'sharePhoneNumber')) {
 		m.protocolMessage = {
 			type: proto.Message.ProtocolMessage.Type.SHARE_PHONE_NUMBER
 		}
-	} else if ('requestPhoneNumber' in message) {
+	} else if (hasNonNullishProperty(message, 'requestPhoneNumber')) {
 		m.requestPhoneNumberMessage = {}
-	} else if ('limitSharing' in message) {
+	} else if (hasNonNullishProperty(message, 'limitSharing')) {
 		m.protocolMessage = {
 			type: proto.Message.ProtocolMessage.Type.LIMIT_SHARING,
 			limitSharing: {
@@ -578,85 +601,17 @@ export const generateWAMessageContent = async (
 				initiatedByMe: true
 			}
 		}
-	} else if('interactiveMessage' in message) {
+	} else if ('interactiveMessage' in message) {
 		m.interactiveMessage = message.interactiveMessage
 	} else {
 		m = await prepareWAMessageMedia(message, options)
 	}
 
-	if('buttons' in message && !!message.buttons) {
-		const buttonsMessage: proto.Message.IButtonsMessage = {
-			buttons: message.buttons.map(b => ({ ...b, type: proto.Message.ButtonsMessage.Button.Type.RESPONSE }))
-		}
-		if('text' in message) {
-			buttonsMessage.contentText = message.text
-			buttonsMessage.headerType = ButtonType.EMPTY
-		} else {
-			if('caption' in message) {
-				buttonsMessage.contentText = message.caption
-			}
-
-			const type = Object.keys(m ?? {})[0]?.replace('Message', '').toUpperCase() || ''
-
-			if (type && ButtonType[type as keyof typeof ButtonType]) {
-				buttonsMessage.headerType = ButtonType[type as keyof typeof ButtonType]
-			}
-
-			Object.assign(buttonsMessage, m)
-
-		}
-
-		if('footer' in message && !!message.footer) {
-			buttonsMessage.footerText = message.footer
-		}
-
-		m = { buttonsMessage }
-	} else if('templateButtons' in message && !!message.templateButtons) {
-		const msg: proto.Message.TemplateMessage.IHydratedFourRowTemplate = {
-			hydratedButtons: message.templateButtons
-		}
-
-		if('text' in message) {
-			msg.hydratedContentText = message.text
-		} else {
-
-			if('caption' in message) {
-				msg.hydratedContentText = message.caption
-			}
-
-			Object.assign(msg, m)
-		}
-
-		if('footer' in message && !!message.footer) {
-			msg.hydratedFooterText = message.footer
-		}
-
-		m = {
-			templateMessage: {
-				fourRowTemplate: msg,
-				hydratedTemplate: msg
-			}
-		}
-	}
-
-	if('sections' in message && !!message.sections) {
-		const listMessage: proto.Message.IListMessage = {
-			sections: message.sections,
-			buttonText: message.buttonText,
-			title: message.title,
-			footerText: message.footer,
-			description: message.text,
-			listType: message.hasOwnProperty("listType") ? message.listType : proto.Message.ListMessage.ListType.SINGLE_SELECT
-		}
-
-		m = { listMessage }
-	}
-
-	if ('viewOnce' in message && !!message.viewOnce) {
+	if (hasOptionalProperty(message, 'viewOnce') && !!message.viewOnce) {
 		m = { viewOnceMessage: { message: m } }
 	}
 
-	if ('mentions' in message && message.mentions?.length) {
+	if (hasOptionalProperty(message, 'mentions') && message.mentions?.length) {
 		const messageType = Object.keys(m)[0]! as Extract<keyof proto.IMessage, MessageWithContextInfo>
 		const key = m[messageType]
 		if ('contextInfo' in key! && !!key.contextInfo) {
@@ -668,7 +623,7 @@ export const generateWAMessageContent = async (
 		}
 	}
 
-	if ('edit' in message) {
+	if (hasOptionalProperty(message, 'edit')) {
 		m = {
 			protocolMessage: {
 				key: message.edit,
@@ -679,13 +634,20 @@ export const generateWAMessageContent = async (
 		}
 	}
 
-	if ('contextInfo' in message && !!message.contextInfo) {
+	if (hasOptionalProperty(message, 'contextInfo') && !!message.contextInfo) {
 		const messageType = Object.keys(m)[0]! as Extract<keyof proto.IMessage, MessageWithContextInfo>
 		const key = m[messageType]
 		if ('contextInfo' in key! && !!key.contextInfo) {
 			key.contextInfo = { ...key.contextInfo, ...message.contextInfo }
 		} else if (key!) {
 			key.contextInfo = message.contextInfo
+		}
+	}
+
+	if (shouldIncludeReportingToken(m)) {
+		m.messageContextInfo = m.messageContextInfo || {}
+		if (!m.messageContextInfo.messageSecret) {
+			m.messageContextInfo.messageSecret = randomBytes(32)
 		}
 	}
 
@@ -789,6 +751,160 @@ export const getContentType = (content: proto.IMessage | undefined) => {
 		const keys = Object.keys(content)
 		const key = keys.find(k => (k === 'conversation' || k.includes('Message')) && k !== 'senderKeyDistributionMessage')
 		return key as keyof typeof content
+	}
+}
+
+export const getButtonType = (message: proto.IMessage) => {
+	if(message.buttonsMessage) {
+		return 'buttons'
+	} else if(message.buttonsResponseMessage) {
+		return 'buttons_response'
+	} else if(message.interactiveResponseMessage) {
+		return 'interactive_response'
+	} else if(message.listMessage) {
+		return 'list'
+	} else if(message.listResponseMessage) {
+		return 'list_response'
+	} else if(message.interactiveMessage) {
+		return 'interactive'
+	}
+}
+
+export const getMessageType = (message: proto.IMessage) => {
+	if (message.pollCreationMessage || message.pollCreationMessageV2 || message.pollCreationMessageV3) {
+		return 'poll'
+	}
+
+	if (message.eventMessage) {
+		return 'event'
+	}
+
+	if (getMediaType(message) !== '') {
+		return 'media'
+	}
+
+	return 'text'
+}
+
+export const getMediaType = (message: proto.IMessage) => {
+	if (message.imageMessage) {
+		return 'image'
+	} else if (message.videoMessage) {
+		return message.videoMessage.gifPlayback ? 'gif' : 'video'
+	} else if (message.audioMessage) {
+		return message.audioMessage.ptt ? 'ptt' : 'audio'
+	} else if (message.contactMessage) {
+		return 'vcard'
+	} else if (message.documentMessage) {
+		return 'document'
+	} else if (message.contactsArrayMessage) {
+		return 'contact_array'
+	} else if (message.liveLocationMessage) {
+		return 'livelocation'
+	} else if (message.stickerMessage) {
+		return 'sticker'
+	} else if (message.listMessage) {
+		return 'list'
+	} else if (message.listResponseMessage) {
+		return 'list_response'
+	} else if (message.buttonsResponseMessage) {
+		return 'buttons_response'
+	} else if (message.orderMessage) {
+		return 'order'
+	} else if (message.productMessage) {
+		return 'product'
+	} else if (message.interactiveResponseMessage) {
+		return 'native_flow_response'
+	} else if (message.groupInviteMessage) {
+		return 'url'
+	}
+
+	return ''
+}
+
+export const getButtonAttrs = (message: proto.IMessage, nativeFlowSpecial?: string): BinaryNode['attrs'] => {
+	if (message.interactiveMessage?.nativeFlowMessage) {
+		switch (nativeFlowSpecial) {
+			case 'review_and_pay':
+			case 'payment_info':
+				return {
+					native_flow_name: nativeFlowSpecial === 'review_and_pay' ? 'order_details' : nativeFlowSpecial
+				}
+			default:
+				return {
+					actual_actors: '2',
+					host_storage: '2',
+					privacy_mode_ts: unixTimestampSeconds().toString()
+				}
+		}
+	} else if (message.templateMessage) {
+		// TODO: Add attributes
+		return {}
+	} else if (message.listMessage) {
+		const type: proto.Message.ListMessage.ListType | null | undefined = message.listMessage.listType
+		if (!type) {
+			throw new Boom('Expected list type inside message')
+		}
+
+		return { v: '2', type: proto.Message.ListMessage.ListType[type].toLowerCase() }
+	} else {
+		return {}
+	}
+}
+
+export const getButtonContent = (message: proto.IMessage, nativeFlowSpecial?: string): BinaryNode['content'] => {
+	if (message.interactiveMessage?.nativeFlowMessage && nativeFlowSpecial) {
+		switch (nativeFlowSpecial) {
+			case 'review_and_pay':
+			case 'payment_info':
+				return []
+			default:
+				return [
+					{
+						tag: 'interactive',
+						attrs: {
+							type: 'native_flow',
+							v: '1'
+						},
+						content: [
+							{
+								tag: 'native_flow',
+								attrs: {
+									v: '2',
+									name: nativeFlowSpecial || 'mixed'
+								}
+							}
+						]
+					},
+					{
+						tag: 'quality_control',
+						attrs: {
+							source_type: 'third_party'
+						}
+					}
+				]
+		}
+	} else if (message.interactiveMessage?.nativeFlowMessage) {
+		return [
+			{
+				tag: 'interactive',
+				attrs: {
+					type: 'native_flow',
+					v: '1'
+				},
+				content: [
+					{
+						tag: 'native_flow',
+						attrs: {
+							v: '9',
+							name: 'mixed'
+						}
+					}
+				]
+			}
+		]
+	} else {
+		return []
 	}
 }
 
