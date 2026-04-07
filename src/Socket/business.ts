@@ -17,7 +17,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 	const sock = makeMessagesRecvSocket(config)
 	const { authState, query, waUploadToServer } = sock
 
-	const updateBusinessProfile = async (args: UpdateBussinesProfileProps) => {
+	const updateBussinesProfile = async (args: UpdateBussinesProfileProps) => {
 		const node: BinaryNode[] = []
 		const simpleFields: (keyof UpdateBussinesProfileProps)[] = ['address', 'email', 'description']
 
@@ -417,7 +417,7 @@ export const makeBusinessSocket = (config: SocketConfig) => {
 		productCreate,
 		productDelete,
 		productUpdate,
-		updateBusinessProfile,
+		updateBussinesProfile,
 		updateCoverPhoto,
 		removeCoverPhoto
 	}

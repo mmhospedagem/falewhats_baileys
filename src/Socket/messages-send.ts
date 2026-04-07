@@ -25,13 +25,11 @@ import {
 	generateMessageIDV2,
 	generateParticipantHashV2,
 	generateWAMessage,
-	getButtonAttrs,
-	getButtonContent,
-	getButtonType,
 	getContentType,
 	getStatusCodeForMediaRetry,
 	getUrlFromDirectPath,
 	getWAUploadToServer,
+	isNativeFlowSpecials,
 	MessageRetryManager,
 	normalizeMessageContent,
 	parseAndInjectE2ESessions,
@@ -97,18 +95,6 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		stdTTL: DEFAULT_CACHE_TTLS.USER_DEVICES,
 		useClones: false
 	})
-
-	const nativeFlowSpecials = [
-		'mpm',
-		'cta_catalog',
-		'send_location',
-		'call_permission_request',
-		'wa_payment_transaction_details',
-		'automated_greeting_message_view_catalog',
-		'payment_info',
-		'review_and_pay',
-		'review_order'
-	]
 
 	// Initialize message retry manager if enabled
 	const messageRetryManager = enableRecentMessageCache ? new MessageRetryManager(logger, maxMsgRetryCount) : null
@@ -663,11 +649,10 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 
 		const extraAttrs: BinaryNodeAttributes = {}
 
-
 		const normalizedMessage: proto.IMessage | undefined = normalizeMessageContent(message)
 		const isInteractiveMessage: boolean = getContentType(normalizedMessage) === 'interactiveMessage'
 
-		if (participant && !isInteractiveMessage) {
+		if (participant && isInteractiveMessage) {
 			if (!isGroup && !isStatus) {
 				additionalAttributes = { ...additionalAttributes, device_fanout: 'false' }
 			}
@@ -681,7 +666,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		}
 
 		if (isInteractiveMessage) {
-			additionalAttributes = { ...additionalAttributes, device_fanout: 'false' }
+			additionalAttributes = { ...additionalAttributes, 'device_fanout': 'false' }
 		}
 
 		await authState.keys.transaction(async () => {
@@ -1013,120 +998,6 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 				logger.debug({ jid }, 'adding device identity')
 			}
 
-			const nativeFlow =
-				message?.interactiveMessage?.nativeFlowMessage ||
-				message?.viewOnceMessage?.message?.interactiveMessage?.nativeFlowMessage ||
-				message?.viewOnceMessageV2?.message?.interactiveMessage?.nativeFlowMessage ||
-				message?.viewOnceMessageV2Extension?.message?.interactiveMessage?.nativeFlowMessage
-
-			const firstButtonName = nativeFlow?.buttons?.[0]?.name
-
-			const buttonType = getButtonType(message)
-			if (buttonType) {
-				const bizNode: BinaryNode = { tag: 'biz', attrs: {} }
-
-				if (nativeFlow && (firstButtonName === 'review_and_pay' || firstButtonName === 'payment_info')) {
-					bizNode.attrs = {
-						native_flow_name: firstButtonName === 'review_and_pay' ? 'order_details' : firstButtonName
-					}
-				} else if (nativeFlow && nativeFlowSpecials.includes(firstButtonName || '')) {
-					bizNode.content = [
-						{
-							tag: 'biz',
-							attrs: {
-								actual_actors: '2',
-								host_storage: '2',
-								privacy_mode_ts: unixTimestampSeconds().toString()
-							},
-							content: [
-								{
-									tag: 'interactive',
-									attrs: {
-										type: 'native_flow',
-										v: '1'
-									},
-									content: [
-										{
-											tag: 'native_flow',
-											attrs: {
-												v: '2',
-												name: firstButtonName || 'mixed'
-											}
-										}
-									]
-								},
-								{
-									tag: 'quality_control',
-									attrs: {
-										source_type: 'third_party'
-									}
-								}
-							]
-						}
-					]
-				} else if (
-					nativeFlow ||
-					message?.buttonsMessage ||
-					message?.viewOnceMessage?.message?.buttonsMessage ||
-					message?.viewOnceMessageV2?.message?.buttonsMessage ||
-					message?.viewOnceMessageV2Extension?.message?.buttonsMessage
-				) {
-					bizNode.attrs = {
-						actual_actors: '2',
-						host_storage: '2',
-						privacy_mode_ts: unixTimestampSeconds().toString()
-					}
-					bizNode.content = [
-						{
-							tag: 'interactive',
-							attrs: {
-								type: 'native_flow',
-								v: '1'
-							},
-							content: [
-								{
-									tag: 'native_flow',
-									attrs: {
-										v: '9',
-										name: 'mixed'
-									}
-								}
-							]
-						}
-					]
-				} else if (message?.listMessage) {
-					bizNode.content = [
-						{
-							tag: 'list',
-							attrs: {
-								type: 'product_list',
-								v: '2'
-							}
-						}
-					]
-				} else {
-					bizNode.content = [
-						{
-							tag: buttonType,
-							attrs: firstButtonName
-								? getButtonAttrs(
-										message,
-										nativeFlowSpecials.indexOf(firstButtonName) !== -1 ? firstButtonName : undefined
-									)
-								: getButtonAttrs(message),
-							content: firstButtonName
-								? getButtonContent(
-										message,
-										nativeFlowSpecials.indexOf(firstButtonName) !== -1 ? firstButtonName : undefined
-									)
-								: getButtonContent(message)
-						}
-					]
-				}
-
-				;(stanza.content as BinaryNode[]).push(bizNode)
-			}
-
 			if (
 				!isNewsletter &&
 				!isRetryResend &&
@@ -1149,6 +1020,96 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 				} catch (error: any) {
 					logger.warn({ jid, trace: error?.stack }, 'failed to attach reporting token')
 				}
+			}
+
+			const nativeFlow = message?.interactiveMessage?.nativeFlowMessage ||
+				message?.viewOnceMessage?.message?.interactiveMessage?.nativeFlowMessage ||
+				message?.viewOnceMessageV2?.message?.interactiveMessage?.nativeFlowMessage ||
+				message?.viewOnceMessageV2Extension?.message?.interactiveMessage?.nativeFlowMessage
+
+			const firstButtonName = nativeFlow?.buttons?.[0]?.name
+
+			const buttonType = getButtonType(message)
+			if(buttonType) {
+				const bizNode: BinaryNode = { tag: 'biz', attrs: {} }
+
+				if (nativeFlow && (firstButtonName === 'review_and_pay' || firstButtonName === 'payment_info')) {
+					bizNode.attrs = {
+						native_flow_name: firstButtonName === 'review_and_pay' ? 'order_details' : firstButtonName
+					}
+				} else if (nativeFlow && isNativeFlowSpecials(firstButtonName || '')) {
+					bizNode.content = [{
+						tag: 'biz',
+						attrs: {
+							actual_actors: '2',
+							host_storage: '2',
+							privacy_mode_ts: unixTimestampSeconds().toString()
+						},
+						content: [{
+							tag: 'interactive',
+							attrs: {
+								type: 'native_flow',
+								v: '1'
+							},
+							content: [{
+								tag: 'native_flow',
+								attrs: {
+									v: '2',
+									name: firstButtonName || 'mixed'
+								}
+							}]
+						},
+							{
+								tag: 'quality_control',
+								attrs: {
+									source_type: 'third_party'
+								}
+							}]
+					}]
+				} else if (
+					nativeFlow || message?.buttonsMessage ||
+					message?.viewOnceMessage?.message?.buttonsMessage ||
+					message?.viewOnceMessageV2?.message?.buttonsMessage ||
+					message?.viewOnceMessageV2Extension?.message?.buttonsMessage
+				) {
+					bizNode.attrs = {
+						actual_actors: '2',
+						host_storage: '2',
+						privacy_mode_ts: unixTimestampSeconds().toString()
+					}
+					bizNode.content = [{
+						tag: 'interactive',
+						attrs: {
+							type: 'native_flow',
+							v: '1'
+						},
+						content: [{
+							tag: 'native_flow',
+							attrs: {
+								v: '9',
+								name: 'mixed'
+							}
+						}]
+					}]
+				} else if (message?.listMessage) {
+					bizNode.content = [{
+						tag: 'list',
+						attrs: {
+							type: 'product_list',
+							v: '2'
+						}
+					}]
+				} else {
+					bizNode.content = [
+						{
+							tag: buttonType,
+							attrs: firstButtonName ? getButtonAttrs(message, isNativeFlowSpecials(firstButtonName) ? firstButtonName : undefined) : getButtonAttrs(message),
+							content: firstButtonName ? getButtonContent(message, isNativeFlowSpecials(firstButtonName) ? firstButtonName : undefined) : getButtonContent(message)
+						}
+					]
+				}
+
+				(stanza.content as BinaryNode[]).push(bizNode)
 			}
 
 			const contactTcTokenData =
@@ -1179,6 +1140,100 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 		}, meId)
 
 		return msgId
+	}
+
+	const getButtonContent = (message: proto.IMessage, nativeFlowSpecial?: string): BinaryNode['content'] => {
+		if (message.interactiveMessage?.nativeFlowMessage && nativeFlowSpecial) {
+			switch (nativeFlowSpecial) {
+				case 'review_and_pay':
+				case 'payment_info':
+					return []
+				default:
+					return [{
+						tag: 'interactive',
+						attrs: {
+							type: 'native_flow',
+							v: '1'
+						},
+						content: [{
+							tag: 'native_flow',
+							attrs: {
+								v: '2',
+								name: nativeFlowSpecial || 'mixed'
+							}
+						}]
+					},
+						{
+							tag: 'quality_control',
+							attrs: {
+								source_type: 'third_party'
+							}
+						}]
+			}
+		} else if (message.interactiveMessage?.nativeFlowMessage) {
+			return [{
+				tag: 'interactive',
+				attrs: {
+					type: 'native_flow',
+					v: '1'
+				},
+				content: [{
+					tag: 'native_flow',
+					attrs: {
+						v: '9',
+						name: 'mixed'
+					}
+				}]
+			}]
+		} else {
+			return []
+		}
+	}
+
+	const getButtonAttrs = (message: proto.IMessage, nativeFlowSpecial?: string): BinaryNode['attrs'] => {
+		if (message.interactiveMessage?.nativeFlowMessage) {
+			switch (nativeFlowSpecial) {
+				case 'review_and_pay':
+				case 'payment_info':
+					return {
+						native_flow_name: nativeFlowSpecial === 'review_and_pay' ? 'order_details' : nativeFlowSpecial
+					}
+				default:
+					return {
+						actual_actors: '2',
+						host_storage: '2',
+						privacy_mode_ts: unixTimestampSeconds().toString()
+					}
+			}
+		} else if (message.templateMessage) {
+			// TODO: Add attributes
+			return {}
+		} else if (message.listMessage) {
+			const type: proto.Message.ListMessage.ListType | null | undefined = message.listMessage.listType
+			if (!type) {
+				throw new Boom('Expected list type inside message')
+			}
+
+			return { v: '2', type: proto.Message.ListMessage.ListType[type].toLowerCase() }
+		} else {
+			return {}
+		}
+	}
+
+	const getButtonType = (message: proto.IMessage) => {
+		if(message.buttonsMessage) {
+			return 'buttons'
+		} else if(message.buttonsResponseMessage) {
+			return 'buttons_response'
+		} else if(message.interactiveResponseMessage) {
+			return 'interactive_response'
+		} else if(message.listMessage) {
+			return 'list'
+		} else if(message.listResponseMessage) {
+			return 'list_response'
+		} else if(message.interactiveMessage) {
+			return 'interactive'
+		}
 	}
 
 	const getMessageType = (message: proto.IMessage) => {
@@ -1297,7 +1352,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 			const content = assertMediaContent(message.message)
 			const mediaKey = content.mediaKey!
 			const meId = authState.creds.me!.id
-			const node = await encryptMediaRetryRequest(message.key, mediaKey, meId)
+			const node = encryptMediaRetryRequest(message.key, mediaKey, meId)
 
 			let error: Error | undefined = undefined
 			await Promise.all([
@@ -1309,7 +1364,7 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 							error = result.error
 						} else {
 							try {
-								const media = await decryptMediaRetryData(result.media!, mediaKey, result.key.id!)
+								const media = decryptMediaRetryData(result.media!, mediaKey, result.key.id!)
 								if (media.result !== proto.MediaRetryNotification.ResultType.SUCCESS) {
 									const resultStr = proto.MediaRetryNotification.ResultType[media.result!]
 									throw new Boom(`Media re-upload failed by device (${resultStr})`, {

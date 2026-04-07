@@ -199,7 +199,7 @@ export const toProductNode = (productId: string | undefined, product: ProductCre
 }
 
 export const parseProductNode = (productNode: BinaryNode) => {
-	const isHidden = productNode?.attrs?.is_hidden === 'true'
+	const isHidden = productNode.attrs.is_hidden === 'true'
 	const id = getBinaryNodeChildString(productNode, 'id')!
 
 	const mediaNode = getBinaryNodeChild(productNode, 'media')!
@@ -220,7 +220,7 @@ export const parseProductNode = (productNode: BinaryNode) => {
 		url: getBinaryNodeChildString(productNode, 'url'),
 		description: getBinaryNodeChildString(productNode, 'description')!,
 		price: +getBinaryNodeChildString(productNode, 'price')!,
-		salePrice: salePriceNodeChild ? +salePriceNodeChild : undefined,
+		salePrice: salePriceNodeChild? +salePriceNodeChild : undefined,
 		currency: getBinaryNodeChildString(productNode, 'currency')!,
 		isHidden
 	}

@@ -78,12 +78,12 @@ export const pix = {
 	type: 'physical-goods',
 };
 
-const data_payment = {
+export const pix_example = {
 	reference_id: Date.now() + '_cc',
 	type: 'physical-goods',
 	currency: 'BRL',
 	total_amount: { value: 262599, offset: 1000 },
-	order_request_id: '4TMUOINTKJI',
+	// order_request_id: '4TMUOINTKJ_',
 	order: {
 		status: 'pending',
 		items: [
@@ -121,11 +121,10 @@ const data_payment = {
 				key: '+5531997853327'
 			},
 		},
-		{ type: 'cards', cards: { enabled: false } },
 	],
 };
 
-const pg_pix_code = {
+const boleto_example = {
 	reference_id: 'cc_' + Date.now(),
 	type: 'physical-goods',
 	payment_type: 'br',
@@ -168,15 +167,126 @@ const pg_pix_code = {
 	},
 };
 
-export const review_and_pay = {
+const pay_link_example = {
+	reference_id: 'cc_' + Date.now(),
+	type: 'physical-goods',
+	payment_type: 'br',
+	payment_settings: [
+		{
+			type: 'payment_link',
+			payment_link: {
+				uri: 'https://payment_link.example.dev',
+			}
+		},
+	],
+	currency: 'BRL',
+	total_amount: { value: 262599, offset: 1000 },
+	order: {
+		status: 'payment_requested',
+		items: [
+			{
+				retailer_id: 'custom-item-4TMUOEZSCT2',
+				name: 'Produto 1',
+				amount: { value: 13900, offset: 1000 },
+				quantity: 10,
+				isCustomItem: true,
+				isQuantitySet: true,
+				description: 'Descrição do produto 1',
+			},
+			{
+				retailer_id: 'custom-item-4TMUOA1N0LZ',
+				name: 'Produto 2',
+				amount: { value: 5550, offset: 1000 },
+				quantity: 13,
+				isCustomItem: true,
+				isQuantitySet: true,
+				description: 'Descrição do produto 2'
+			},
+		],
+		subtotal: { value: 211150, offset: 1000 },
+		tax: { value: 36106, offset: 1000, description: 'ICMS' },
+		shipping: { value: 25900, offset: 1000, description: 'Valor da entrega' },
+		discount: { value: 10557, offset: 1000, description: 'Desconto fidelidade' },
+	},
+};
+
+const all_pay_example = {
+	reference_id: 'cc_' + Date.now(),
+	type: 'physical-goods',
+	payment_type: 'br',
+	payment_settings: [
+		{
+			type: 'boleto',
+			boleto: {
+				digitable_line: '34191095866353261093675008900005412640000021128'
+			},
+		},
+		{
+			type: 'pix_dynamic_code',
+			pix_dynamic_code: {
+				code: '00020101021226770014BR.GOV.BCB.PIX2555api.itau/pix/qr/v2/3dca0c19-c1ce-4308-ac78-1cb1dbde4e1b5204000053039865802BR5915HINOVA PAYMENTS6014BELO HORIZONTE62070503***63044602',
+				merchant_name: 'Aaprovel',
+				key_type: 'EVP',
+				key: '+5531997853327'
+			},
+		},
+		{
+			type: 'payment_link',
+			payment_link: {
+				uri: 'https://payment_link.example.dev',
+			}
+		},
+	],
+	currency: 'BRL',
+	total_amount: { value: 262599, offset: 1000 },
+	order: {
+		status: 'payment_requested',
+		items: [
+			{
+				retailer_id: 'custom-item-4TMUOEZSCT2',
+				name: 'Produto 1',
+				amount: { value: 13900, offset: 1000 },
+				quantity: 10,
+				isCustomItem: true,
+				isQuantitySet: true,
+				description: 'Descrição do produto 1',
+			},
+			{
+				retailer_id: 'custom-item-4TMUOA1N0LZ',
+				name: 'Produto 2',
+				amount: { value: 5550, offset: 1000 },
+				quantity: 13,
+				isCustomItem: true,
+				isQuantitySet: true,
+				description: 'Descrição do produto 2'
+			},
+		],
+		subtotal: { value: 211150, offset: 1000 },
+		tax: { value: 36106, offset: 1000, description: 'ICMS' },
+		shipping: { value: 25900, offset: 1000, description: 'Valor da entrega' },
+		discount: { value: 10557, offset: 1000, description: 'Desconto fidelidade' },
+	},
+};
+
+export const review_and_pay_pix = {
 	name: 'review_and_pay',
-	buttonParamsJson: JSON.stringify(data_payment),
+	buttonParamsJson: JSON.stringify(pix_example),
 	messageParamsJson: JSON.stringify({"bottom_sheet":{"in_thread_buttons_limit":5,"divider_indices":[]}})
 };
-export const review_order_pay = {
-	name: 'review_order',
-	buttonParamsJson: JSON.stringify(review_order),
-	messageParamsJson: JSON.stringify({"bottom_sheet":{"in_thread_buttons_limit":3,"divider_indices":[]}})
+export const review_and_pay_boleto = {
+	name: 'review_and_pay',
+	buttonParamsJson: JSON.stringify(boleto_example),
+	messageParamsJson: JSON.stringify({"bottom_sheet":{"in_thread_buttons_limit":5,"divider_indices":[]}})
+};
+export const review_and_pay_link = {
+	name: 'review_and_pay',
+	buttonParamsJson: JSON.stringify(pay_link_example),
+	messageParamsJson: JSON.stringify({"bottom_sheet":{"in_thread_buttons_limit":5,"divider_indices":[]}})
+};
+export const review_and_pay_all = {
+	name: 'review_and_pay',
+	buttonParamsJson: JSON.stringify(all_pay_example),
+	messageParamsJson: JSON.stringify({"bottom_sheet":{"in_thread_buttons_limit":5,"divider_indices":[]}})
 };
 
 export const payment_info_pix = {
@@ -184,6 +294,13 @@ export const payment_info_pix = {
 	buttonParamsJson: JSON.stringify(pix),
 	messageParamsJson: JSON.stringify({"bottom_sheet":{"in_thread_buttons_limit":3,"divider_indices":[]}})
 }
+
+// Ainda não funciona
+export const review_order_pay = {
+	name: 'review_order',
+	buttonParamsJson: JSON.stringify(review_order),
+	messageParamsJson: JSON.stringify({"bottom_sheet":{"in_thread_buttons_limit":3,"divider_indices":[]}})
+};
 
 const interactiveMessage: proto.Message.IInteractiveMessage = {
 	body: {
@@ -197,7 +314,7 @@ const interactiveMessage: proto.Message.IInteractiveMessage = {
 		text: 'CodeChat®'
 	},
 	nativeFlowMessage: {
-		buttons: [review_and_pay]
+		buttons: []
 	}
 }
 

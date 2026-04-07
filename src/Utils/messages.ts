@@ -14,6 +14,7 @@ import {
 import type {
 	AnyMediaMessageContent,
 	AnyMessageContent,
+	AnyRegularMessageContent,
 	DownloadableMessage,
 	MessageContentGenerationOptions,
 	MessageGenerationOptions,
@@ -27,7 +28,7 @@ import type {
 	WATextMessage
 } from '../Types'
 import { WAMessageStatus, WAProto } from '../Types'
-import { type BinaryNode, isJidGroup, isJidNewsletter, isJidStatusBroadcast, jidNormalizedUser } from '../WABinary'
+import { isJidGroup, isJidNewsletter, isJidStatusBroadcast, jidNormalizedUser } from '../WABinary'
 import { sha256 } from './crypto'
 import { generateMessageIDV2, getKeyAuthor, unixTimestampSeconds } from './generics'
 import type { ILogger } from './logger'
@@ -380,10 +381,8 @@ export const hasNonNullishProperty = <K extends PropertyKey>(
 ): message is ExtractByKey<AnyMessageContent, K> => {
 	return (
 		typeof message === 'object' &&
-		message !== null &&
 		key in message &&
-		(message as any)[key] !== null &&
-		(message as any)[key] !== undefined
+		!!(message as any)[key]
 	)
 }
 
@@ -601,24 +600,119 @@ export const generateWAMessageContent = async (
 				initiatedByMe: true
 			}
 		}
-	} else if ('interactiveMessage' in message) {
+	} 
+	/**
+	 * Adicionado por @jrcleber
+	 */
+	else if (hasNonNullishProperty(message, 'interactiveMessage')) {
 		m.interactiveMessage = message.interactiveMessage
-	} else {
+	}
+	// ------------------
+	 else {
 		m = await prepareWAMessageMedia(message, options)
 	}
+
+	/**
+	 * Adicionado por @jrcleber
+	 * @deprecated
+	 */
+	if('buttons' in message && !!message.buttons) {
+		const ButtonType = proto.Message.ButtonsMessage.HeaderType
+		const buttonsMessage: proto.Message.IButtonsMessage = {
+			buttons: message.buttons.map(b => ({ ...b, type: proto.Message.ButtonsMessage.Button.Type.RESPONSE }))
+		}
+		if('text' in message) {
+			buttonsMessage.contentText = message.text
+			buttonsMessage.headerType = ButtonType.EMPTY
+		} else {
+			if('caption' in message) {
+				buttonsMessage.contentText = message.caption
+			}
+
+			const type = Object.keys(m ?? {})[0]?.replace('Message', '').toUpperCase() || ''
+
+			if (type && ButtonType[type as keyof typeof ButtonType]) {
+				buttonsMessage.headerType = ButtonType[type as keyof typeof ButtonType]
+			}
+
+			Object.assign(buttonsMessage, m)
+
+		}
+
+		if('footer' in message && !!message.footer) {
+			buttonsMessage.footerText = message.footer
+		}
+
+		m = { buttonsMessage }
+	} else if('templateButtons' in message && !!message.templateButtons) {
+		const msg: proto.Message.TemplateMessage.IHydratedFourRowTemplate = {
+			hydratedButtons: message.templateButtons
+		}
+
+		if('text' in message) {
+			msg.hydratedContentText = message.text
+		} else {
+
+			if('caption' in message) {
+				msg.hydratedContentText = message.caption
+			}
+
+			Object.assign(msg, m)
+		}
+
+		if('footer' in message && !!message.footer) {
+			msg.hydratedFooterText = message.footer
+		}
+
+		m = {
+			templateMessage: {
+				fourRowTemplate: msg,
+				hydratedTemplate: msg
+			}
+		}
+	}
+
+	/**
+	 * Adicionado por @jrcleber
+	 * @deprecated
+	 */
+	if('sections' in message && !!message.sections) {
+		const listMessage: proto.Message.IListMessage = {
+			sections: message.sections,
+			buttonText: message.buttonText,
+			title: message.title,
+			footerText: message.footer,
+			description: message.text,
+			listType: message.hasOwnProperty("listType") ? message.listType : proto.Message.ListMessage.ListType.SINGLE_SELECT
+		}
+
+		m = { listMessage }
+	}
+	// ----------------
 
 	if (hasOptionalProperty(message, 'viewOnce') && !!message.viewOnce) {
 		m = { viewOnceMessage: { message: m } }
 	}
 
-	if (hasOptionalProperty(message, 'mentions') && message.mentions?.length) {
+	if (
+		(hasOptionalProperty(message, 'mentions') && message.mentions?.length) ||
+		(hasOptionalProperty(message, 'mentionAll') && message.mentionAll)
+	) {
 		const messageType = Object.keys(m)[0]! as Extract<keyof proto.IMessage, MessageWithContextInfo>
 		const key = m[messageType]
-		if ('contextInfo' in key! && !!key.contextInfo) {
-			key.contextInfo.mentionedJid = message.mentions
+		if (key && 'contextInfo' in key) {
+			key.contextInfo = key.contextInfo || {}
+			if (message.mentions?.length) {
+				key.contextInfo.mentionedJid = message.mentions
+			}
+
+			if (message.mentionAll) {
+				key.contextInfo.nonJidMentions = 1
+			}
 		} else if (key!) {
 			key.contextInfo = {
-				mentionedJid: message.mentions
+				mentionedJid: message.mentions,
+				nonJidMentions: message.mentionAll ? 1 : 0
 			}
 		}
 	}
@@ -751,160 +845,6 @@ export const getContentType = (content: proto.IMessage | undefined) => {
 		const keys = Object.keys(content)
 		const key = keys.find(k => (k === 'conversation' || k.includes('Message')) && k !== 'senderKeyDistributionMessage')
 		return key as keyof typeof content
-	}
-}
-
-export const getButtonType = (message: proto.IMessage) => {
-	if(message.buttonsMessage) {
-		return 'buttons'
-	} else if(message.buttonsResponseMessage) {
-		return 'buttons_response'
-	} else if(message.interactiveResponseMessage) {
-		return 'interactive_response'
-	} else if(message.listMessage) {
-		return 'list'
-	} else if(message.listResponseMessage) {
-		return 'list_response'
-	} else if(message.interactiveMessage) {
-		return 'interactive'
-	}
-}
-
-export const getMessageType = (message: proto.IMessage) => {
-	if (message.pollCreationMessage || message.pollCreationMessageV2 || message.pollCreationMessageV3) {
-		return 'poll'
-	}
-
-	if (message.eventMessage) {
-		return 'event'
-	}
-
-	if (getMediaType(message) !== '') {
-		return 'media'
-	}
-
-	return 'text'
-}
-
-export const getMediaType = (message: proto.IMessage) => {
-	if (message.imageMessage) {
-		return 'image'
-	} else if (message.videoMessage) {
-		return message.videoMessage.gifPlayback ? 'gif' : 'video'
-	} else if (message.audioMessage) {
-		return message.audioMessage.ptt ? 'ptt' : 'audio'
-	} else if (message.contactMessage) {
-		return 'vcard'
-	} else if (message.documentMessage) {
-		return 'document'
-	} else if (message.contactsArrayMessage) {
-		return 'contact_array'
-	} else if (message.liveLocationMessage) {
-		return 'livelocation'
-	} else if (message.stickerMessage) {
-		return 'sticker'
-	} else if (message.listMessage) {
-		return 'list'
-	} else if (message.listResponseMessage) {
-		return 'list_response'
-	} else if (message.buttonsResponseMessage) {
-		return 'buttons_response'
-	} else if (message.orderMessage) {
-		return 'order'
-	} else if (message.productMessage) {
-		return 'product'
-	} else if (message.interactiveResponseMessage) {
-		return 'native_flow_response'
-	} else if (message.groupInviteMessage) {
-		return 'url'
-	}
-
-	return ''
-}
-
-export const getButtonAttrs = (message: proto.IMessage, nativeFlowSpecial?: string): BinaryNode['attrs'] => {
-	if (message.interactiveMessage?.nativeFlowMessage) {
-		switch (nativeFlowSpecial) {
-			case 'review_and_pay':
-			case 'payment_info':
-				return {
-					native_flow_name: nativeFlowSpecial === 'review_and_pay' ? 'order_details' : nativeFlowSpecial
-				}
-			default:
-				return {
-					actual_actors: '2',
-					host_storage: '2',
-					privacy_mode_ts: unixTimestampSeconds().toString()
-				}
-		}
-	} else if (message.templateMessage) {
-		// TODO: Add attributes
-		return {}
-	} else if (message.listMessage) {
-		const type: proto.Message.ListMessage.ListType | null | undefined = message.listMessage.listType
-		if (!type) {
-			throw new Boom('Expected list type inside message')
-		}
-
-		return { v: '2', type: proto.Message.ListMessage.ListType[type].toLowerCase() }
-	} else {
-		return {}
-	}
-}
-
-export const getButtonContent = (message: proto.IMessage, nativeFlowSpecial?: string): BinaryNode['content'] => {
-	if (message.interactiveMessage?.nativeFlowMessage && nativeFlowSpecial) {
-		switch (nativeFlowSpecial) {
-			case 'review_and_pay':
-			case 'payment_info':
-				return []
-			default:
-				return [
-					{
-						tag: 'interactive',
-						attrs: {
-							type: 'native_flow',
-							v: '1'
-						},
-						content: [
-							{
-								tag: 'native_flow',
-								attrs: {
-									v: '2',
-									name: nativeFlowSpecial || 'mixed'
-								}
-							}
-						]
-					},
-					{
-						tag: 'quality_control',
-						attrs: {
-							source_type: 'third_party'
-						}
-					}
-				]
-		}
-	} else if (message.interactiveMessage?.nativeFlowMessage) {
-		return [
-			{
-				tag: 'interactive',
-				attrs: {
-					type: 'native_flow',
-					v: '1'
-				},
-				content: [
-					{
-						tag: 'native_flow',
-						attrs: {
-							v: '9',
-							name: 'mixed'
-						}
-					}
-				]
-			}
-		]
-	} else {
-		return []
 	}
 }
 
@@ -1251,3 +1191,18 @@ export const assertMediaContent = (content: proto.IMessage | null | undefined) =
 
 	return mediaContent
 }
+
+/**
+ * Adicionado por @jrcleber
+ */
+export const isNativeFlowSpecials = (value: string) => [
+	'mpm',
+	'cta_catalog',
+	'send_location',
+	'call_permission_request',
+	'wa_payment_transaction_details',
+	'automated_greeting_message_view_catalog',
+	'payment_info',
+	'review_and_pay',
+	'review_order',
+].includes(value)

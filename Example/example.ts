@@ -1,10 +1,9 @@
 import { Boom } from '@hapi/boom'
 import NodeCache from '@cacheable/node-cache'
 import readline from 'readline'
-import makeWASocket, { CacheStore, DEFAULT_CONNECTION_CONFIG,
-	delay, DisconnectReason, fetchLatestBaileysVersion, generateMessageIDV2, getAggregateVotesInPollMessage, isJidNewsletter, makeCacheableSignalKeyStore, proto, useMultiFileAuthState, WAMessageContent, WAMessageKey } from '../src'
+import makeWASocket, { CacheStore, DEFAULT_CONNECTION_CONFIG, delay, DisconnectReason, fetchLatestBaileysVersion, generateMessageIDV2, getAggregateVotesInPollMessage, isJidNewsletter, makeCacheableSignalKeyStore, proto, useMultiFileAuthState, WAMessageContent, WAMessageKey } from '../src'
 import P from 'pino'
-import { randomBytes } from 'crypto'
+import { buttons, review_and_pay_all, review_and_pay_boleto, review_and_pay_link, review_and_pay_pix } from './buttons'
 
 const logger = P({
   level: "trace",
@@ -26,7 +25,8 @@ const logger = P({
 logger.level = 'trace'
 
 const doReplies = process.argv.includes('--do-reply')
-const usePairingCode = process.argv.includes('--use-pairing-code')
+// const usePairingCode = process.argv.includes('--use-pairing-code')
+const usePairingCode = true
 
 // external map to store retry counts of messages when decryption/encryption fails
 // keep this out of the socket itself, so as to prevent a message decryption/encryption loop across socket restarts
@@ -50,7 +50,7 @@ const startSock = async() => {
 	logger.debug({version: version.join('.'), isLatest}, `using latest WA version`)
 
 	const sock = makeWASocket({
-		version,
+		version: [2, 3000, 1036021366],
 		logger,
 		waWebSocketUrl: process.env.SOCKET_URL ?? DEFAULT_CONNECTION_CONFIG.waWebSocketUrl,
 		auth: {
@@ -90,8 +90,8 @@ const startSock = async() => {
 					// Pairing code for Web clients
 					if (usePairingCode && !sock.authState.creds.registered) {
 						const phoneNumber = await question('Please enter your phone number:\n')
-						const code = await sock.requestPairingCode(phoneNumber)
-						console.log(`Pairing code: ${code}`)
+						const code = await sock.requestPairingCode(phoneNumber, 'CODECHAT')
+						logger.info(`Pairing code: ${code}`)
 					}
 				}
 
@@ -237,36 +237,27 @@ const startSock = async() => {
 startSock()
 	.then(async sock => {
 		await delay(2000)
+
 		const jid = '553197853327@s.whatsapp.net'
 		const ownJid = '553195918699@s.whatsapp.net'
 		const ownLid = '153115802226704@lid'
 
-		await sock.sendMessage(jid, {
-			interactiveMessage: {
-				body: {
-					text: 'Texto'
-				},
-				footer: {
-					text: 'Roda pé'
-				},
-				nativeFlowMessage: {
-					buttons: [
-						{
-							name: 'quick_reply',
-							buttonParamsJson: JSON.stringify({
-								display_text: 'Botão 1',
-								id: randomBytes(32).toString('base64'),
-							})
-						},
-						{
-							name: 'quick_reply',
-							buttonParamsJson: JSON.stringify({
-								display_text: 'Botão 2',
-								id: randomBytes(32).toString('base64'),
-							})
-						}
-					]
-				}
+		const interactiveMessage: proto.Message.IInteractiveMessage = {
+			header: {
+				title: 'Título',
+				hasMediaAttachment: false
+			},
+			body: {
+				text: 'Descrição'
+			},
+			footer: {
+				text: '@jrcleber'
+			},
+			nativeFlowMessage: {
+				buttons: [review_and_pay_all]
 			}
-		})
+		}
+
+		await sock.sendMessage(jid, { interactiveMessage })
+
 	})

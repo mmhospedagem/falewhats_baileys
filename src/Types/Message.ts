@@ -113,6 +113,8 @@ export interface WAUrlInfo {
 type Mentionable = {
 	/** list of jids that are mentioned in the accompanying text */
 	mentions?: string[]
+	/** mention all */
+	mentionAll?: boolean
 }
 type Contextable = {
 	/** add contextInfo to the message */
@@ -132,16 +134,6 @@ type Templatable = {
 
 	footer?: string
 }
-
-type Editable = {
-	edit?: WAMessageKey
-}
-type WithDimensions = {
-	width?: number
-	height?: number
-}
-
-
 type Listable = {
 	/** Sections of the List */
 	sections?: proto.Message.ListMessage.ISection[]
@@ -152,6 +144,15 @@ type Listable = {
 	/** Text of the bnutton on the list (required) */
 	buttonText?: string
 	listType?: proto.Message.ListMessage.ListType
+}
+
+
+type Editable = {
+	edit?: WAMessageKey
+}
+type WithDimensions = {
+	width?: number
+	height?: number
 }
 
 export type PollMessageOptions = {
@@ -191,7 +192,10 @@ export type AnyMediaMessageContent = (
 			jpegThumbnail?: string
 	  } & Mentionable &
 			Contextable &
-			WithDimensions)
+			Buttonable &
+			Templatable &
+			WithDimensions
+		)
 	| ({
 			video: WAMediaUpload
 			caption?: string
@@ -201,6 +205,8 @@ export type AnyMediaMessageContent = (
 			ptv?: boolean
 	  } & Mentionable &
 			Contextable &
+			Buttonable &
+			Templatable &
 			WithDimensions)
 	| {
 			audio: WAMediaUpload
@@ -218,7 +224,10 @@ export type AnyMediaMessageContent = (
 			mimetype: string
 			fileName?: string
 			caption?: string
-	  } & Contextable)
+	  } & Contextable &
+				Buttonable &
+				Templatable 
+		)
 ) & { mimetype?: string } & Editable
 
 export type ButtonReplyInfo = {
@@ -245,17 +254,21 @@ export type AnyRegularMessageContent = (
 			linkPreview?: WAUrlInfo | null
 	  } & Mentionable &
 			Contextable &
+			Editable &
 			Buttonable &
 			Templatable &
-			Listable &
-			Editable)
+			Listable
+		)
 	| AnyMediaMessageContent
 	| { event: EventMessageOptions }
 	| ({
 			poll: PollMessageOptions
 	  } & Mentionable &
 			Contextable &
-			Editable)
+			Editable &
+			Buttonable &
+			Templatable
+		)
 	| {
 			contacts: {
 				displayName?: string
@@ -312,8 +325,10 @@ export type AnyMessageContent =
 			limitSharing: boolean
 	  }
 	| {
-			interactiveMessage: proto.Message.IInteractiveMessage
-	  }
+		interactiveMessage: proto.Message.IInteractiveMessage
+	}
+
+export type GroupMetadataParticipants = Pick<GroupMetadata, 'participants'>
 
 type MinimalRelayOptions = {
 	/** override the message ID with a custom provided string */
@@ -375,8 +390,6 @@ export type MediaGenerationOptions = {
 	backgroundColor?: string
 
 	font?: number
-
-	width?: number
 }
 export type MessageContentGenerationOptions = MediaGenerationOptions & {
 	getUrlInfo?: (text: string) => Promise<WAUrlInfo | undefined>
@@ -402,9 +415,9 @@ export type WAMessageCursor = { before: WAMessageKey | undefined } | { after: WA
 export type MessageUserReceiptUpdate = { key: WAMessageKey; receipt: MessageUserReceipt }
 
 export type MediaDecryptionKeyInfo = {
-	iv: Buffer
-	cipherKey: Buffer
-	macKey?: Buffer
+	iv: Uint8Array
+	cipherKey: Uint8Array
+	macKey?: Uint8Array
 }
 
 export type MinimalMessage = Pick<WAMessage, 'key' | 'messageTimestamp'>
