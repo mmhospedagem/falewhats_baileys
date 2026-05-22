@@ -14,7 +14,6 @@ import {
 import type {
 	AnyMediaMessageContent,
 	AnyMessageContent,
-	AnyRegularMessageContent,
 	DownloadableMessage,
 	MessageContentGenerationOptions,
 	MessageGenerationOptions,
@@ -224,7 +223,8 @@ export const prepareWAMessageMedia = async (
 	const requiresDurationComputation = mediaType === 'audio' && typeof uploadData.seconds === 'undefined'
 	const requiresThumbnailComputation =
 		(mediaType === 'image' || mediaType === 'video') && typeof uploadData['jpegThumbnail'] === 'undefined'
-	const requiresWaveformProcessing = mediaType === 'audio' && uploadData.ptt === true
+	const requiresWaveformProcessing =
+		mediaType === 'audio' && uploadData.ptt === true && typeof uploadData.waveform === 'undefined'
 	const requiresAudioBackground = options.backgroundColor && mediaType === 'audio' && uploadData.ptt === true
 	const requiresOriginalForSomeProcessing = requiresDurationComputation || requiresThumbnailComputation
 	const { mediaKey, encFilePath, originalFilePath, fileEncSha256, fileSha256, fileLength } = await encryptedStream(
@@ -381,8 +381,10 @@ export const hasNonNullishProperty = <K extends PropertyKey>(
 ): message is ExtractByKey<AnyMessageContent, K> => {
 	return (
 		typeof message === 'object' &&
+		message !== null &&
 		key in message &&
-		!!(message as any)[key]
+		(message as any)[key] !== null &&
+		(message as any)[key] !== undefined
 	)
 }
 
@@ -584,6 +586,11 @@ export const generateWAMessageContent = async (
 				m.pollCreationMessage = pollCreationMessage
 			}
 		}
+	} else if (hasNonNullishProperty(message, 'album')) {
+		m.albumMessage = {
+			expectedImageCount: message.album.expectedImageCount,
+			expectedVideoCount: message.album.expectedVideoCount
+		}
 	} else if (hasNonNullishProperty(message, 'sharePhoneNumber')) {
 		m.protocolMessage = {
 			type: proto.Message.ProtocolMessage.Type.SHARE_PHONE_NUMBER
@@ -607,88 +614,9 @@ export const generateWAMessageContent = async (
 	else if (hasNonNullishProperty(message, 'interactiveMessage')) {
 		m.interactiveMessage = message.interactiveMessage
 	}
-	// ------------------
-	 else {
+	else {
 		m = await prepareWAMessageMedia(message, options)
 	}
-
-	/**
-	 * Adicionado por @jrcleber
-	 * @deprecated
-	 */
-	if('buttons' in message && !!message.buttons) {
-		const ButtonType = proto.Message.ButtonsMessage.HeaderType
-		const buttonsMessage: proto.Message.IButtonsMessage = {
-			buttons: message.buttons.map(b => ({ ...b, type: proto.Message.ButtonsMessage.Button.Type.RESPONSE }))
-		}
-		if('text' in message) {
-			buttonsMessage.contentText = message.text
-			buttonsMessage.headerType = ButtonType.EMPTY
-		} else {
-			if('caption' in message) {
-				buttonsMessage.contentText = message.caption
-			}
-
-			const type = Object.keys(m ?? {})[0]?.replace('Message', '').toUpperCase() || ''
-
-			if (type && ButtonType[type as keyof typeof ButtonType]) {
-				buttonsMessage.headerType = ButtonType[type as keyof typeof ButtonType]
-			}
-
-			Object.assign(buttonsMessage, m)
-
-		}
-
-		if('footer' in message && !!message.footer) {
-			buttonsMessage.footerText = message.footer
-		}
-
-		m = { buttonsMessage }
-	} else if('templateButtons' in message && !!message.templateButtons) {
-		const msg: proto.Message.TemplateMessage.IHydratedFourRowTemplate = {
-			hydratedButtons: message.templateButtons
-		}
-
-		if('text' in message) {
-			msg.hydratedContentText = message.text
-		} else {
-
-			if('caption' in message) {
-				msg.hydratedContentText = message.caption
-			}
-
-			Object.assign(msg, m)
-		}
-
-		if('footer' in message && !!message.footer) {
-			msg.hydratedFooterText = message.footer
-		}
-
-		m = {
-			templateMessage: {
-				fourRowTemplate: msg,
-				hydratedTemplate: msg
-			}
-		}
-	}
-
-	/**
-	 * Adicionado por @jrcleber
-	 * @deprecated
-	 */
-	if('sections' in message && !!message.sections) {
-		const listMessage: proto.Message.IListMessage = {
-			sections: message.sections,
-			buttonText: message.buttonText,
-			title: message.title,
-			footerText: message.footer,
-			description: message.text,
-			listType: message.hasOwnProperty("listType") ? message.listType : proto.Message.ListMessage.ListType.SINGLE_SELECT
-		}
-
-		m = { listMessage }
-	}
-	// ----------------
 
 	if (hasOptionalProperty(message, 'viewOnce') && !!message.viewOnce) {
 		m = { viewOnceMessage: { message: m } }
@@ -735,6 +663,16 @@ export const generateWAMessageContent = async (
 			key.contextInfo = { ...key.contextInfo, ...message.contextInfo }
 		} else if (key!) {
 			key.contextInfo = message.contextInfo
+		}
+	}
+
+	if (hasOptionalProperty(message, 'albumParentKey') && !!message?.['albumParentKey']) {
+		m.messageContextInfo = {
+			...m.messageContextInfo,
+			messageAssociation: {
+				associationType: WAProto.MessageAssociation.AssociationType.MEDIA_ALBUM,
+				parentMessageKey: message?.['albumParentKey']
+			}
 		}
 	}
 

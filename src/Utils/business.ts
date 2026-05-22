@@ -128,7 +128,7 @@ export const toProductNode = (productId: string | undefined, product: ProductCre
 		})
 	}
 
-	if (product?.images?.length) {
+	if (product.images.length) {
 		content.push({
 			tag: 'media',
 			attrs: {},
@@ -205,6 +205,9 @@ export const parseProductNode = (productNode: BinaryNode) => {
 	const mediaNode = getBinaryNodeChild(productNode, 'media')!
 	const statusInfoNode = getBinaryNodeChild(productNode, 'status_info')!
 
+	/**
+	 * Adicionado por @jrcleber
+	 */
 	const salePriceNode = getBinaryNodeChild(productNode, 'sale_price')
 	const salePriceNodeChild = getBinaryNodeChildString(salePriceNode, 'price')
 
@@ -220,6 +223,9 @@ export const parseProductNode = (productNode: BinaryNode) => {
 		url: getBinaryNodeChildString(productNode, 'url'),
 		description: getBinaryNodeChildString(productNode, 'description')!,
 		price: +getBinaryNodeChildString(productNode, 'price')!,
+		/**
+	   * Adicionado por @jrcleber
+	   */
 		salePrice: salePriceNodeChild? +salePriceNodeChild : undefined,
 		currency: getBinaryNodeChildString(productNode, 'currency')!,
 		isHidden

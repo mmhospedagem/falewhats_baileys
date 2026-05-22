@@ -250,7 +250,8 @@ Adicionar `função [**relayMessage**](./src/Socket/messages-send.ts#604):
 			nativeFlow || message?.buttonsMessage ||
 			message?.viewOnceMessage?.message?.buttonsMessage ||
 			message?.viewOnceMessageV2?.message?.buttonsMessage ||
-			message?.viewOnceMessageV2Extension?.message?.buttonsMessage
+			message?.viewOnceMessageV2Extension?.message?.buttonsMessage ||
+			message?.interactiveMessage?.carouselMessage
 		) {
 			bizNode.attrs = {
 				actual_actors: '2',

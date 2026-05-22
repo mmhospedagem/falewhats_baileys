@@ -1,9 +1,8 @@
 import { Boom } from '@hapi/boom'
 import NodeCache from '@cacheable/node-cache'
 import readline from 'readline'
-import makeWASocket, { CacheStore, DEFAULT_CONNECTION_CONFIG, delay, DisconnectReason, fetchLatestBaileysVersion, generateMessageIDV2, getAggregateVotesInPollMessage, isJidNewsletter, makeCacheableSignalKeyStore, proto, useMultiFileAuthState, WAMessageContent, WAMessageKey } from '../src'
+import makeWASocket, { CacheStore, DEFAULT_CONNECTION_CONFIG, delay, DisconnectReason, fetchLatestBaileysVersion, generateMessageIDV2, generateWAMessageFromContent, getAggregateVotesInPollMessage, isJidNewsletter, makeCacheableSignalKeyStore, prepareWAMessageMedia, proto, useMultiFileAuthState, WAMessageContent, WAMessageKey, WASocket } from '../src'
 import P from 'pino'
-import { buttons, review_and_pay_all, review_and_pay_boleto, review_and_pay_link, review_and_pay_pix } from './buttons'
 
 const logger = P({
   level: "trace",
@@ -12,11 +11,11 @@ const logger = P({
       {
         target: "pino-pretty", // pretty-print for console
         options: { colorize: true },
-        level: "trace",
+        level: "debug",
       },
       {
         target: "pino/file", // raw file output
-        options: { destination: './wa-logs.txt' },
+        options: { destination: './wa-logs.json' },
         level: "trace",
       },
     ],
@@ -25,8 +24,7 @@ const logger = P({
 logger.level = 'trace'
 
 const doReplies = process.argv.includes('--do-reply')
-// const usePairingCode = process.argv.includes('--use-pairing-code')
-const usePairingCode = true
+const usePairingCode = process.argv.includes('--use-pairing-code')
 
 // external map to store retry counts of messages when decryption/encryption fails
 // keep this out of the socket itself, so as to prevent a message decryption/encryption loop across socket restarts
@@ -50,7 +48,7 @@ const startSock = async() => {
 	logger.debug({version: version.join('.'), isLatest}, `using latest WA version`)
 
 	const sock = makeWASocket({
-		version: [2, 3000, 1036021366],
+		version,
 		logger,
 		waWebSocketUrl: process.env.SOCKET_URL ?? DEFAULT_CONNECTION_CONFIG.waWebSocketUrl,
 		auth: {
@@ -90,8 +88,8 @@ const startSock = async() => {
 					// Pairing code for Web clients
 					if (usePairingCode && !sock.authState.creds.registered) {
 						const phoneNumber = await question('Please enter your phone number:\n')
-						const code = await sock.requestPairingCode(phoneNumber, 'CODECHAT')
-						logger.info(`Pairing code: ${code}`)
+						const code = await sock.requestPairingCode(phoneNumber)
+						console.log(`Pairing code: ${code}`)
 					}
 				}
 
@@ -214,11 +212,12 @@ const startSock = async() => {
 			}
 
 			if(events['chats.delete']) {
-				logger.debug('chats deleted ', events['chats.delete'])
+				logger.debug('chats deleted ', events['chats.delete'] as any)
 			}
 
 			if(events['group.member-tag.update']) {
-				logger.debug('group member tag update', JSON.stringify(events['group.member-tag.update'], undefined, 2))
+				// @ts-ignore
+				logger.debug('group member tag update', JSON.stringify(events['group.member-tag.update'], undefined as any, 2))
 			}
 		}
 	)
@@ -234,30 +233,123 @@ const startSock = async() => {
 	}
 }
 
+async function sendCarousel(sock: WASocket, jid: string) {
+  const image1 = await prepareWAMessageMedia(
+    { image: { url: 'https://fastly.picsum.photos/id/1047/1000/650.jpg?grayscale&hmac=iOq8PPREkheQRVt0aqX4BMFWcK-hzo_OLJDkKCuYR78' } },
+    { upload: sock.waUploadToServer }
+  )
+
+	logger.debug("image 1 - loaded")
+
+  const image2 = await prepareWAMessageMedia(
+    { image: { url: 'https://fastly.picsum.photos/id/532/1000/650.jpg?grayscale&hmac=mEKaZADt7nX8e8Q9qcAhRSj5Y3JZDesPegKuOWeGrwY' } },
+    { upload: sock.waUploadToServer }
+  )
+
+	logger.debug("image 2 - loaded")
+
+  return generateWAMessageFromContent(
+    jid,
+		{
+			interactiveMessage: proto.Message.InteractiveMessage.create({
+				body: {
+					text: 'Escolha uma opção abaixo',
+				},
+				footer: {
+					text: 'CodeChat',
+				},
+				header: {
+					title: 'Catálogo',
+					hasMediaAttachment: false,
+				},
+				carouselMessage: {
+					cards: [
+						{
+							header: {
+								title: 'Card 1',
+								imageMessage: image1.imageMessage,
+								hasMediaAttachment: true,
+							},
+							body: {
+								text: 'Descrição do primeiro card',
+							},
+							footer: {
+								text: 'Rodapé 1',
+							},
+							nativeFlowMessage: {
+								buttons: [
+									{
+										name: 'quick_reply',
+										buttonParamsJson: JSON.stringify({
+											display_text: 'Selecionar',
+											id: 'card_1',
+										}),
+									},
+									{
+										name: 'cta_url',
+										buttonParamsJson: JSON.stringify({
+											display_text: 'Abrir link',
+											url: 'https://example.com/card-1',
+										}),
+									},
+								],
+							},
+						},
+						{
+							header: {
+								title: 'Card 2',
+								imageMessage: image2.imageMessage,
+								hasMediaAttachment: true,
+							},
+							body: {
+								text: 'Descrição do segundo card',
+							},
+							footer: {
+								text: 'Rodapé 2',
+							},
+							nativeFlowMessage: {
+								buttons: [
+									{
+										name: 'quick_reply',
+										buttonParamsJson: JSON.stringify({
+											display_text: 'Selecionar',
+											id: 'card_2',
+										}),
+									},
+									{
+										name: 'cta_url',
+										buttonParamsJson: JSON.stringify({
+											display_text: 'Abrir link',
+											url: 'https://example.com/card-1',
+										}),
+									},
+								],
+							},
+						},
+					],
+					carouselCardType: proto.Message.InteractiveMessage.CarouselMessage.CarouselCardType.HSCROLL_CARDS,
+					messageVersion: 1
+				},
+			}),
+		},
+    { userJid:jid }
+  )
+}
+
 startSock()
 	.then(async sock => {
 		await delay(2000)
 
-		const jid = '553197853327@s.whatsapp.net'
+		const jid = '556284879620@s.whatsapp.net'
 		const ownJid = '553195918699@s.whatsapp.net'
 		const ownLid = '153115802226704@lid'
 
-		const interactiveMessage: proto.Message.IInteractiveMessage = {
-			header: {
-				title: 'Título',
-				hasMediaAttachment: false
-			},
-			body: {
-				text: 'Descrição'
-			},
-			footer: {
-				text: '@jrcleber'
-			},
-			nativeFlowMessage: {
-				buttons: [review_and_pay_all]
-			}
-		}
+		const send = await sendCarousel(sock, jid)
 
-		await sock.sendMessage(jid, { interactiveMessage })
+		console.log("Interactive:", JSON.stringify(send.message, null, 2))
 
+		await sock.sendMessage(jid,{
+			interactiveMessage:  send.message!.interactiveMessage!
+		})
 	})
+	.catch(err => logger.error(err))

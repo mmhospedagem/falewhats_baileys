@@ -1,0 +1,140 @@
+{
+  "templateId": "1523342989431347",
+  "interactiveMessageTemplate": {
+    "body": {
+      "text": "Olá Cleber!👋\n\nNo consórcio Klubi, dá pra escolher o Carro que quiser!\n\nSem entrada, sem juros e parcelas acessíveis para facilitar sua conquista.\n\nSe quiser, posso te apresentar uma proposta com mais detalhes. \n\nCaso não queira ser contatado, clique “Bloquear contato\""
+    },
+    "header": {
+      "title": ""
+    },
+    "contextInfo": {
+      "dataSharingContext": {
+        "parameters": [
+          {
+            "key": "data_sharing_encrypted_token_undisclosed",
+            "stringData": "AQKqpdI1fs9GTy4nwQaZBK+rEpc8t6LZhAuzNJj5kaBfYR5QGRkYDzfxdjoYNKiji7ZppXJhEBYlc7PDBjhjF5gZoHYCpB8/r/cx558WU+5Qw5NTDWQyXTMzQXlL8OQ5t8FlfBU64QiJUnDoKFsv/wqkViCIZYFDONnRtsGs2ZI/0brevOoQBObE8TSw918WhQDQzv6FQEqclAM="
+          }
+        ],
+        "dataSharingFlags": 0,
+        "showMmDisclosure": false
+      }
+    },
+    "carouselMessage": {
+      "cards": [
+        {
+          "body": {
+            "text": "Vamos simular esse aqui?"
+          },
+          "header": {
+            "imageMessage": {
+              "url": "https://mmg.whatsapp.net/v/t62.7118-24/569850835_4416561288631994_2085555154914944584_n.enc?ccb=11-4&oh=01_Q5Aa4gFyPZ_B9sU9R4ja68BEvaueEBg2rqwx_lo4hDryl1Y5TA&oe=6A312CFD&_nc_sid=5e03e0&mms3=true",
+              "width": 1376,
+              "height": 768,
+              "mediaKey": "yDZrgVLIZep8tJVeh6ITTYddcZri+J9iiCDS53OUKD8=",
+              "mimetype": "image/jpeg",
+              "directPath": "/v/t62.7118-24/569850835_4416561288631994_2085555154914944584_n.enc?ccb=11-4&oh=01_Q5Aa4gFyPZ_B9sU9R4ja68BEvaueEBg2rqwx_lo4hDryl1Y5TA&oe=6A312CFD&_nc_sid=5e03e0",
+              "fileLength": "136430",
+              "fileSha256": "5D+AFMnL9LcBWjVUnLu4MbvdjqqtpKGdntH7lmkADKw=",
+              "contextInfo": {},
+              "fileEncSha256": "WPusu9FS3h7KulxPtVIsx04lN8czZSr9kA+gCIxcii0=",
+              "jpegThumbnail": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAFA3PEY8MlBGQUZaVVBfeMiCeG5uePWvuZHI////////////////////////////////////////////////////2wBDAVVaWnhpeOuCguv/////////////////////////////////////////////////////////////////////////wAARCAAoAEgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCwDQaQEGkc9MUAOANKM96iDHPU/lTsv6n8qACVsAUwsCOKWTcQM5/KmdqBE8f3aVSNx5pI8bOaAvz5wKBktFNBHSigCoJDjApvzE5PSnSSDYccVAT8w+YGgCbdjp1pNz9WJxTVcKD60pkONrAfWgCcEHGSfoaa6915GeaiBA/iP4CnJK3QHIB70hkqHjFKGIb734YoVuOgpd43YwfypiHZ70UZooApEn0qPac0UUALtansrPRRQABCO9OVcHNFFAE6mnfiaKKADNFFFAH/2Q==",
+              "thumbnailSha256": "3m1Fzh0N7Yjsl3qkGKEav2AzbK3JeUHApKWWshy0pUY=",
+              "mediaKeyTimestamp": "1779024576",
+              "thumbnailEncSha256": "YtoS5Ze9E0+oRfVNMssW47Iob9qJPtuFLg3rZIvgOl0=",
+              "thumbnailDirectPath": "/v/t62.35850-24/532718967_1901795267195250_8769329605651062109_n.enc?ccb=11-4&oh=01_Q5Aa4gGsxKPSq6hRG2vEI9clyDXkkk-JI0rZgV_bsu_oeMs4aQ&oe=6A312C3E&_nc_sid=5e03e0"
+            },
+            "hasMediaAttachment": true
+          },
+          "nativeFlowMessage": {
+            "buttons": [
+              {
+                "name": "quick_reply",
+                "buttonParamsJson": "{\"display_text\":\"Vamos l\\u00e1\",\"id\":\"c_tenho_interesse_primeira_mensagem_d0_carrossel_hyundai_hb20\"}"
+              },
+              {
+                "name": "quick_reply",
+                "buttonParamsJson": "{\"display_text\":\"Bloquear contato\",\"id\":\"c_bloquear_contato_primeira_mensagem_d0\"}"
+              }
+            ]
+          }
+        },
+        {
+          "body": {
+            "text": "Ou esse?"
+          },
+          "header": {
+            "imageMessage": {
+              "url": "https://mmg.whatsapp.net/v/t62.7118-24/537643090_1343750704517043_8338019675660005057_n.enc?ccb=11-4&oh=01_Q5Aa4gHycY0GxWwoH-2lckSQnASc2cyZzLspJaMwzSxd9uX69Q&oe=6A304663&_nc_sid=5e03e0&mms3=true",
+              "width": 1376,
+              "height": 768,
+              "mediaKey": "RMAwkaXUJ7ZKqeCz0SvpZUi2Fu+rSKrrdujZmdj/ewc=",
+              "mimetype": "image/jpeg",
+              "directPath": "/v/t62.7118-24/537643090_1343750704517043_8338019675660005057_n.enc?ccb=11-4&oh=01_Q5Aa4gHycY0GxWwoH-2lckSQnASc2cyZzLspJaMwzSxd9uX69Q&oe=6A304663&_nc_sid=5e03e0",
+              "fileLength": "131964",
+              "fileSha256": "CUG/107iDktNub5VP3TrKyHOYV3FLD46b3uO5KdNuPw=",
+              "contextInfo": {},
+              "fileEncSha256": "U6Ber3D9fhJ/2N61hJUQqJSYxVlizTqHveLnaQNIUG8=",
+              "jpegThumbnail": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAFA3PEY8MlBGQUZaVVBfeMiCeG5uePWvuZHI////////////////////////////////////////////////////2wBDAVVaWnhpeOuCguv/////////////////////////////////////////////////////////////////////////wAARCAAoAEgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCwDQaQEGkc9MGgBwBpRnvUQY56n8qdlvU/lQAStgCmFgRxmlk3EDOfypnagRPH92lUjceRSR42c0Kg3ZCigZLRTQRRQBTEhxgUAOxzg4qQOpPIpDdKBwOKAAYXnDE/SmlpDyQaUOGG4/WolnbeOm0npQA8iUn7xIpSCMZH5UNMAcDk00SkyADGO9AEyE4x2pQzA/e/ShW9hRvGfun8qAHg96KM80UgKdMKHPUUUUwDa4GAeKQRsRiiigBfLIpyoQc5oooAsJ9af36miigAzRRRQB//2Q==",
+              "thumbnailSha256": "NtYcpclgHJuLUW1D6gSp4vFiWKlLrOFI6OY6H12vun4=",
+              "mediaKeyTimestamp": "1778967012",
+              "thumbnailEncSha256": "s4sRwdDUlVh3oezKOEH1DBO6f0FWU+JYogIlIuUqQaQ=",
+              "thumbnailDirectPath": "/v/t62.35850-24/633554062_992292270215440_1154312678385726818_n.enc?ccb=11-4&oh=01_Q5Aa4gHDzkUmLZ3z5f2691jgxB0CNUiW8-34KjO36-I2uNKnnA&oe=6A306C6E&_nc_sid=5e03e0"
+            },
+            "hasMediaAttachment": true
+          },
+          "nativeFlowMessage": {
+            "buttons": [
+              {
+                "name": "quick_reply",
+                "buttonParamsJson": "{\"display_text\":\"Vamos l\\u00e1\",\"id\":\"c_tenho_interesse_primeira_mensagem_d0_carrossel_fiat_strada\"}"
+              },
+              {
+                "name": "quick_reply",
+                "buttonParamsJson": "{\"display_text\":\"Bloquear contato\",\"id\":\"c_bloquear_contato_primeira_mensagem_d0\"}"
+              }
+            ]
+          }
+        },
+        {
+          "body": {
+            "text": "Ou então esse?"
+          },
+          "header": {
+            "imageMessage": {
+              "url": "https://mmg.whatsapp.net/v/t62.7118-24/23527327_1308592873937493_2228337576883828339_n.enc?ccb=11-4&oh=01_Q5Aa4gEQrugahDQgM2dy_7sHlAJa-PYu29r_SJc9RiXCb2YT8Q&oe=6A30A31A&_nc_sid=5e03e0&mms3=true",
+              "width": 1376,
+              "height": 768,
+              "mediaKey": "2pe5nD6jtrHFfrG/1VmBXx9N2ffmY+IC0Mux6gdEFAw=",
+              "mimetype": "image/jpeg",
+              "directPath": "/v/t62.7118-24/23527327_1308592873937493_2228337576883828339_n.enc?ccb=11-4&oh=01_Q5Aa4gEQrugahDQgM2dy_7sHlAJa-PYu29r_SJc9RiXCb2YT8Q&oe=6A30A31A&_nc_sid=5e03e0",
+              "fileLength": "133653",
+              "fileSha256": "WWpSE1bHxFAaeRs/NQ37zMbmzRmVtNSHWXnNF4/BWHo=",
+              "contextInfo": {},
+              "fileEncSha256": "1jlKH4wAUCqHob+WxrOB5S3OD4FJ803HVI9rekkFSaY=",
+              "jpegThumbnail": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAFA3PEY8MlBGQUZaVVBfeMiCeG5uePWvuZHI////////////////////////////////////////////////////2wBDAVVaWnhpeOuCguv/////////////////////////////////////////////////////////////////////////wAARCAAoAEgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCwDQaQEGkc9MGgBQDThnvUQY56n8qdl/U/lQAStgCmFgRxRJuIGc/lTO1AixH92lUjceRSR42c0Kg3Z2igZLRTQRRQBTEhxgU3JJ5PH1p0sg2HHFVj0HIoAsF8H5TzSAyk8k1ErlejGnb3KlgcUAWwQwGc496ZImORyM1XDserkfjT4id2d2QKAJ0JxjtShmB+9+lCt7CjeP7p/KgB+e9FGeaKQFEkkdKZtOaKKYCbG9KkRW2lcUUUAAjI709FwaKKAJlNOxz1NFFAC5ooooA//9k=",
+              "thumbnailSha256": "sLQj2YP2S/28VOcAVUQ2HW/mpfMwHpRrqJ6OLFwWmO4=",
+              "mediaKeyTimestamp": "1778994176",
+              "thumbnailEncSha256": "n9xTAMHFWn3dh8S1xWXXpmiwNap4VfnUqQoJo1lX/SI=",
+              "thumbnailDirectPath": "/v/t62.35850-24/641483185_1552393566234152_3100677657870239603_n.enc?ccb=11-4&oh=01_Q5Aa4gG6VPdKlGvxZIIpa18USj9AERZcIUA2Wm3RUNcWj_48vA&oe=6A30B546&_nc_sid=5e03e0"
+            },
+            "hasMediaAttachment": true
+          },
+          "nativeFlowMessage": {
+            "buttons": [
+              {
+                "name": "quick_reply",
+                "buttonParamsJson": "{\"display_text\":\"Vamos l\\u00e1\",\"id\":\"c_tenho_interesse_primeira_mensagem_d0_carrossel_byd_songplus\"}"
+              },
+              {
+                "name": "quick_reply",
+                "buttonParamsJson": "{\"display_text\":\"Bloquear contato\",\"id\":\"c_bloquear_contato_primeira_mensagem_d0\"}"
+              }
+            ]
+          }
+        }
+      ],
+      "messageVersion": 1,
+      "carouselCardType": "HSCROLL_CARDS"
+    }
+  }
+}
