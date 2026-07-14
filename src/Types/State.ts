@@ -14,6 +14,13 @@ export enum SyncState {
 
 export type WAConnectionState = 'open' | 'connecting' | 'close'
 
+export type PasskeyRequestNotificationType = 'passkey_prologue_request' | 'crsc_continuation'
+
+export type PasskeyRequestState = {
+	notificationType: PasskeyRequestNotificationType
+	hasRequestOptions: boolean
+}
+
 export type ConnectionState = {
 	/** connection is now open, connecting or closed */
 	connection: WAConnectionState
@@ -45,6 +52,18 @@ export type ConnectionState = {
 	 * When you are in this state, WhatsApp prevents outgoing messages and calls.
 	 */
 	reachoutTimeLock?: ReachoutTimelockState
+
+	/**
+	 * WhatsApp requested an interactive passkey step during companion linking.
+	 * Baileys acknowledges the notification, but cannot complete WebAuthn headlessly.
+	 */
+	passkeyRequest?: PasskeyRequestState
+
+	/**
+	 * The server is forcing a Shortcake/passkey step for companion linking.
+	 * `hasSigner` indicates whether `signPasskeyAssertion` was configured.
+	 */
+	passkeyRequired?: { hasSigner: boolean }
 }
 
 export type ReachoutTimelockState = {

@@ -11,6 +11,7 @@ import {
 	STATUS_EXPIRY_SECONDS
 } from '../Defaults'
 import type {
+	BaileysEventEmitter,
 	GroupParticipant,
 	MessageReceiptType,
 	MessageRelayOptions,
@@ -41,9 +42,12 @@ import {
 	getCallStatusFromNode,
 	getHistoryMsg,
 	getNextPreKeys,
+	getPasskeyRequestState,
+	getPlatformType,
 	getStatusFromReceiptType,
 	handleIdentityChange,
 	hkdf,
+	makeShortcakeFlow,
 	MISSING_KEYS_ERROR_TEXT,
 	NACK_REASONS,
 	NO_MESSAGE_FOUND_ERROR_TEXT,
@@ -53,6 +57,7 @@ import {
 	xmppPreKey,
 	xmppSignedPreKey
 } from '../Utils'
+import type { ILogger } from '../Utils/logger'
 import { makeMutex } from '../Utils/make-mutex'
 import { makeOfflineNodeProcessor, type MessageType } from '../Utils/offline-node-processor'
 import { buildAckStanza } from '../Utils/stanza-ack'
@@ -103,6 +108,16 @@ type ReachoutTimelockNotificationPayload = {
 
 const ENFORCEMENT_TYPE_VALUES = new Set<string>(Object.values(ReachoutTimelockEnforcementType))
 
+export const emitPasskeyRequestUpdate = (node: BinaryNode, ev: BaileysEventEmitter, logger: ILogger) => {
+	const passkeyRequest = getPasskeyRequestState(node)
+	if (!passkeyRequest) {
+		return
+	}
+
+	logger.info(passkeyRequest, 'received passkey companion-linking request')
+	ev.emit('connection.update', { passkeyRequest })
+}
+
 function isValidEnforcementType(value: string | undefined): value is ReachoutTimelockEnforcementType {
 	return typeof value === 'string' && ENFORCEMENT_TYPE_VALUES.has(value)
 }
@@ -139,6 +154,37 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 	} = sock
 
 	const getLIDForPN = signalRepository.lidMapping.getLIDForPN.bind(signalRepository.lidMapping)
+
+	const shortcakeFlow = config.signPasskeyAssertion
+		? makeShortcakeFlow({
+				logger,
+				query,
+				signAssertion: config.signPasskeyAssertion,
+				getCreds: () => authState.creds,
+				updateCreds: patch => ev.emit('creds.update', patch),
+				deviceType: getPlatformType(config.browser[1]),
+				emitVerificationCode: code => logger.debug({ code }, 'shortcake verification code')
+			})
+		: null
+
+	registerSocketEndHandler(() => shortcakeFlow?.clearSession())
+
+	const handleShortcakeNotification = async (node: BinaryNode) => {
+		emitPasskeyRequestUpdate(node, ev, logger)
+
+		if (node.attrs.type === 'passkey_prologue_request') {
+			ev.emit('connection.update', { passkeyRequired: { hasSigner: !!shortcakeFlow } })
+		}
+
+		if (shortcakeFlow) {
+			await shortcakeFlow.handleIncomingNotification(node)
+			return
+		}
+
+		if (node.attrs.type === 'passkey_prologue_request') {
+			logger.warn({ id: node.attrs.id }, 'server requested passkey prologue but no signPasskeyAssertion configured')
+		}
+	}
 
 	/** this mutex ensures that each retryRequest will wait for the previous one to finish */
 	const retryMutex = makeMutex()
@@ -1196,6 +1242,11 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 				authState.creds.registered = true
 				ev.emit('creds.update', authState.creds)
 				break
+			case 'passkey_prologue_request':
+			case 'crsc_continuation': {
+				await handleShortcakeNotification(node)
+				break
+			}
 			case 'privacy_token':
 				await handlePrivacyTokenNotification(node)
 				break
