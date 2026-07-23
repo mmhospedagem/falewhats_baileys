@@ -204,6 +204,8 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 
 	// Debounce identity-change session refreshes per JID to avoid bursts
 	const identityAssertDebounce = new NodeCache<boolean>({ stdTTL: 5, useClones: false })
+	const retried463MessageIds = new NodeCache<boolean>({ stdTTL: 15 * 60, useClones: false })
+	const recent463AutoRetryJids = new NodeCache<boolean>({ stdTTL: 30, useClones: false })
 
 	let sendActiveReceipts = false
 
@@ -1959,6 +1961,39 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 								onNewJidStored: trackTcTokenJid
 							})
 							logger.debug({ from: ackFrom }, 'completed 463 token recovery issuance')
+
+							const originalMsgId = attrs.id
+							if (
+								originalMsgId &&
+								messageRetryManager &&
+								!retried463MessageIds.get(originalMsgId) &&
+								!recent463AutoRetryJids.get(ackFrom)
+							) {
+								const cachedMsg = messageRetryManager.getRecentMessage(ackFrom, originalMsgId)
+								if (cachedMsg?.message) {
+									retried463MessageIds.set(originalMsgId, true)
+									recent463AutoRetryJids.set(ackFrom, true)
+									logger.info(
+										{ from: ackFrom, msgId: originalMsgId },
+										'retrying message once after 463 token recovery'
+									)
+									try {
+										await relayMessage(ackFrom, cachedMsg.message, { useUserDevicesCache: false })
+										messageRetryManager.markRetrySuccess(originalMsgId)
+									} catch (retryErr: any) {
+										logger.warn(
+											{ from: ackFrom, msgId: originalMsgId, err: retryErr?.message },
+											'auto retry after 463 recovery failed'
+										)
+										messageRetryManager.markRetryFailed(originalMsgId)
+									}
+								} else {
+									logger.debug(
+										{ from: ackFrom, msgId: originalMsgId },
+										'could not auto retry after 463 recovery because message was not found in retry cache'
+									)
+								}
+							}
 						} catch (err: any) {
 							logger.debug({ from: ackFrom, err: err?.message }, 'failed 463 token recovery issuance')
 						} finally {
