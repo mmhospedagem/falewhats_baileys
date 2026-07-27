@@ -28,11 +28,6 @@ export type IdentityChangeContext = {
 	 * Must not throw; implementations are responsible for their own error handling.
 	 */
 	onBeforeSessionRefresh?: (jid: string) => void
-	/**
-	 * Invoked immediately when a participant's identity change is processed.
-	 * Used to invalidate caches such as sender-key-memory.
-	 */
-	onParticipantIdentityChange?: (jid: string) => void | Promise<void>
 }
 
 export async function handleIdentityChange(
@@ -42,14 +37,6 @@ export async function handleIdentityChange(
 	const from = node.attrs.from
 	if (!from) {
 		return { action: 'invalid_notification' }
-	}
-
-	if (ctx.onParticipantIdentityChange) {
-		try {
-			await ctx.onParticipantIdentityChange(from)
-		} catch (error) {
-			ctx.logger.warn({ error, jid: from }, 'onParticipantIdentityChange callback failed')
-		}
 	}
 
 	const identityNode = getBinaryNodeChild(node, 'identity')

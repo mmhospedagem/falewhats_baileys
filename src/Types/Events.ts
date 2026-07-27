@@ -106,7 +106,6 @@ export type BaileysEventMap = {
 
 	'blocklist.set': { blocklist: string[] }
 	'blocklist.update': { blocklist: string[]; type: 'add' | 'remove' }
-	'identity-change': { jid: string; me: boolean }
 
 	/** Receive an update on a call, including when the call was received, rejected, accepted */
 	call: WACallEvent[]
