@@ -92,8 +92,13 @@ export async function resolveTcTokenJid(
 	getLIDForPN: (pn: string) => Promise<string | null>
 ): Promise<string> {
 	if (isLidUser(jid)) return jid
-	const lid = await getLIDForPN(jid)
-	return lid ?? jid
+	if (!isPnUser(jid)) return jid
+	try {
+		const lid = await getLIDForPN(jid)
+		return lid ?? jid
+	} catch {
+		return jid
+	}
 }
 
 /** Resolve target JID for issuing privacy token based on AB prop 14303 */
@@ -105,14 +110,23 @@ export async function resolveIssuanceJid(
 ): Promise<string> {
 	if (issueToLid) {
 		if (isLidUser(jid)) return jid
-		const lid = await getLIDForPN(jid)
-		return lid ?? jid
+		if (!isPnUser(jid)) return jid
+		try {
+			const lid = await getLIDForPN(jid)
+			return lid ?? jid
+		} catch {
+			return jid
+		}
 	}
 
 	if (!isLidUser(jid)) return jid
 	if (getPNForLID) {
-		const pn = await getPNForLID(jid)
-		return pn ?? jid
+		try {
+			const pn = await getPNForLID(jid)
+			return pn ?? jid
+		} catch {
+			return jid
+		}
 	}
 
 	return jid
@@ -138,8 +152,9 @@ export async function buildTcTokenFromJid({
 		const tcTokenData = await authState.keys.get('tctoken', [storageJid])
 		const entry = tcTokenData?.[storageJid]
 		const tcTokenBuffer = entry?.token
+		const timestamp = entry?.timestamp
 
-		if (!tcTokenBuffer?.length || isTcTokenExpired(entry?.timestamp)) {
+		if (!tcTokenBuffer?.length || timestamp === undefined || isTcTokenExpired(timestamp)) {
 			if (tcTokenBuffer) {
 				// Preserve senderTimestamp so shouldSendNewTcToken() keeps its dedupe state
 				// after we drop the unusable peer token. Only wipe the record entirely when
@@ -156,7 +171,7 @@ export async function buildTcTokenFromJid({
 
 		baseContent.push({
 			tag: 'tctoken',
-			attrs: {},
+			attrs: { t: String(timestamp) },
 			content: tcTokenBuffer
 		})
 

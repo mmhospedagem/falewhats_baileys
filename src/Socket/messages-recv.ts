@@ -11,6 +11,7 @@ import {
 	STATUS_EXPIRY_SECONDS
 } from '../Defaults'
 import type {
+	BaileysEventEmitter,
 	GroupParticipant,
 	MessageReceiptType,
 	MessageRelayOptions,
@@ -41,9 +42,12 @@ import {
 	getCallStatusFromNode,
 	getHistoryMsg,
 	getNextPreKeys,
+	getPasskeyRequestState,
+	getPlatformType,
 	getStatusFromReceiptType,
 	handleIdentityChange,
 	hkdf,
+	makeShortcakeFlow,
 	MISSING_KEYS_ERROR_TEXT,
 	NACK_REASONS,
 	NO_MESSAGE_FOUND_ERROR_TEXT,
@@ -53,6 +57,7 @@ import {
 	xmppPreKey,
 	xmppSignedPreKey
 } from '../Utils'
+import type { ILogger } from '../Utils/logger'
 import { makeMutex } from '../Utils/make-mutex'
 import { makeOfflineNodeProcessor, type MessageType } from '../Utils/offline-node-processor'
 import { buildAckStanza } from '../Utils/stanza-ack'
@@ -103,6 +108,16 @@ type ReachoutTimelockNotificationPayload = {
 
 const ENFORCEMENT_TYPE_VALUES = new Set<string>(Object.values(ReachoutTimelockEnforcementType))
 
+export const emitPasskeyRequestUpdate = (node: BinaryNode, ev: BaileysEventEmitter, logger: ILogger) => {
+	const passkeyRequest = getPasskeyRequestState(node)
+	if (!passkeyRequest) {
+		return
+	}
+
+	logger.info(passkeyRequest, 'received passkey companion-linking request')
+	ev.emit('connection.update', { passkeyRequest })
+}
+
 function isValidEnforcementType(value: string | undefined): value is ReachoutTimelockEnforcementType {
 	return typeof value === 'string' && ENFORCEMENT_TYPE_VALUES.has(value)
 }
@@ -140,6 +155,37 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 
 	const getLIDForPN = signalRepository.lidMapping.getLIDForPN.bind(signalRepository.lidMapping)
 
+	const shortcakeFlow = config.signPasskeyAssertion
+		? makeShortcakeFlow({
+				logger,
+				query,
+				signAssertion: config.signPasskeyAssertion,
+				getCreds: () => authState.creds,
+				updateCreds: patch => ev.emit('creds.update', patch),
+				deviceType: getPlatformType(config.browser[1]),
+				emitVerificationCode: code => logger.debug({ code }, 'shortcake verification code')
+			})
+		: null
+
+	registerSocketEndHandler(() => shortcakeFlow?.clearSession())
+
+	const handleShortcakeNotification = async (node: BinaryNode) => {
+		emitPasskeyRequestUpdate(node, ev, logger)
+
+		if (node.attrs.type === 'passkey_prologue_request') {
+			ev.emit('connection.update', { passkeyRequired: { hasSigner: !!shortcakeFlow } })
+		}
+
+		if (shortcakeFlow) {
+			await shortcakeFlow.handleIncomingNotification(node)
+			return
+		}
+
+		if (node.attrs.type === 'passkey_prologue_request') {
+			logger.warn({ id: node.attrs.id }, 'server requested passkey prologue but no signPasskeyAssertion configured')
+		}
+	}
+
 	/** this mutex ensures that each retryRequest will wait for the previous one to finish */
 	const retryMutex = makeMutex()
 
@@ -158,6 +204,8 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 
 	// Debounce identity-change session refreshes per JID to avoid bursts
 	const identityAssertDebounce = new NodeCache<boolean>({ stdTTL: 5, useClones: false })
+	const retried463MessageIds = new NodeCache<boolean>({ stdTTL: 15 * 60, useClones: false })
+	const recent463AutoRetryJids = new NodeCache<boolean>({ stdTTL: 30, useClones: false })
 
 	let sendActiveReceipts = false
 
@@ -789,7 +837,15 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 				assertSessions,
 				debounceCache: identityAssertDebounce,
 				logger,
-				onBeforeSessionRefresh: reissueTcTokenAfterIdentityChange
+				onBeforeSessionRefresh: reissueTcTokenAfterIdentityChange,
+				onParticipantIdentityChange: jid => {
+					const normalized = jidNormalizedUser(jid)
+					sock.recentlyChangedIdentities.add(normalized)
+					ev.emit('identity-change', { jid: normalized, me: false })
+					setTimeout(() => {
+						sock.recentlyChangedIdentities.delete(normalized)
+					}, 10 * 60 * 1000).unref()
+				}
 			})
 
 			if (result.action === 'no_identity_node') {
@@ -1196,6 +1252,11 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 				authState.creds.registered = true
 				ev.emit('creds.update', authState.creds)
 				break
+			case 'passkey_prologue_request':
+			case 'crsc_continuation': {
+				await handleShortcakeNotification(node)
+				break
+			}
 			case 'privacy_token':
 				await handlePrivacyTokenNotification(node)
 				break
@@ -1900,6 +1961,39 @@ export const makeMessagesRecvSocket = (config: SocketConfig) => {
 								onNewJidStored: trackTcTokenJid
 							})
 							logger.debug({ from: ackFrom }, 'completed 463 token recovery issuance')
+
+							const originalMsgId = attrs.id
+							if (
+								originalMsgId &&
+								messageRetryManager &&
+								!retried463MessageIds.get(originalMsgId) &&
+								!recent463AutoRetryJids.get(ackFrom)
+							) {
+								const cachedMsg = messageRetryManager.getRecentMessage(ackFrom, originalMsgId)
+								if (cachedMsg?.message) {
+									retried463MessageIds.set(originalMsgId, true)
+									recent463AutoRetryJids.set(ackFrom, true)
+									logger.info(
+										{ from: ackFrom, msgId: originalMsgId },
+										'retrying message once after 463 token recovery'
+									)
+									try {
+										await relayMessage(ackFrom, cachedMsg.message, { useUserDevicesCache: false })
+										messageRetryManager.markRetrySuccess(originalMsgId)
+									} catch (retryErr: any) {
+										logger.warn(
+											{ from: ackFrom, msgId: originalMsgId, err: retryErr?.message },
+											'auto retry after 463 recovery failed'
+										)
+										messageRetryManager.markRetryFailed(originalMsgId)
+									}
+								} else {
+									logger.debug(
+										{ from: ackFrom, msgId: originalMsgId },
+										'could not auto retry after 463 recovery because message was not found in retry cache'
+									)
+								}
+							}
 						} catch (err: any) {
 							logger.debug({ from: ackFrom, err: err?.message }, 'failed 463 token recovery issuance')
 						} finally {

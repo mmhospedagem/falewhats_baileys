@@ -249,4 +249,48 @@ describe('Identity Change Handling', () => {
 			expect(onBeforeSessionRefresh).not.toHaveBeenCalled()
 		})
 	})
+
+	describe('onParticipantIdentityChange callback', () => {
+		it('fires only for confirmed participant identity changes', async () => {
+			mockValidateSession.mockResolvedValue({ exists: true })
+			mockAssertSessions.mockResolvedValue(true)
+			const onParticipantIdentityChange = jest.fn()
+
+			const result = await handleIdentityChange(createIdentityChangeNode('user@s.whatsapp.net'), {
+				...createContext(),
+				onParticipantIdentityChange
+			})
+
+			expect(result.action).toBe('session_refreshed')
+			expect(onParticipantIdentityChange).toHaveBeenCalledWith('user@s.whatsapp.net')
+		})
+
+		it('does not fire for skipped notifications', async () => {
+			const onParticipantIdentityChange = jest.fn()
+
+			await handleIdentityChange(createIdentityChangeNode('user:5@s.whatsapp.net'), {
+				...createContext(),
+				onParticipantIdentityChange
+			})
+
+			await handleIdentityChange(createIdentityChangeNode(mockMeId), {
+				...createContext(),
+				onParticipantIdentityChange
+			})
+
+			await handleIdentityChange(
+				{
+					tag: 'notification',
+					attrs: { from: 'user@s.whatsapp.net', type: 'encrypt' },
+					content: []
+				},
+				{
+					...createContext(),
+					onParticipantIdentityChange
+				}
+			)
+
+			expect(onParticipantIdentityChange).not.toHaveBeenCalled()
+		})
+	})
 })
