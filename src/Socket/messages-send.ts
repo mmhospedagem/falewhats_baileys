@@ -1517,7 +1517,12 @@ export const makeMessagesSocket = (config: SocketConfig) => {
 							error = result.error
 						} else {
 							try {
-								const media = decryptMediaRetryData(result.media!, mediaKey, result.key.id!)
+								const media = decryptMediaRetryData(
+									result.media!,
+									mediaKey,
+									result.key.id!,
+									meId
+								)
 								if (media.result !== proto.MediaRetryNotification.ResultType.SUCCESS) {
 									const resultStr = proto.MediaRetryNotification.ResultType[media.result!]
 									throw new Boom(`Media re-upload failed by device (${resultStr})`, {
