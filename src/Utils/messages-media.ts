@@ -898,20 +898,14 @@ export const getWAUploadToServer = (
 	}
 }
 
-const getMediaRetryKey = (mediaKey: Buffer | Uint8Array | string) => {
-	
-	if (typeof mediaKey === 'string') {
-		mediaKey = Buffer.from(mediaKey.replace('data:;base64,', ''), 'base64')
-	}
-
+const getMediaRetryKey = (mediaKey: Buffer | Uint8Array) => {
 	return hkdf(mediaKey, 32, { info: 'WhatsApp Media Retry Notification' })
-
 }
 
 /**
  * Generate a binary node that will request the phone to re-upload the media & return the newly uploaded URL
  */
-export const encryptMediaRetryRequest = (key: WAMessageKey, mediaKey: Buffer | Uint8Array | string, meId: string) => {
+export const encryptMediaRetryRequest = (key: WAMessageKey, mediaKey: Buffer | Uint8Array, meId: string) => {
 	const recp: proto.IServerErrorReceipt = { stanzaId: key.id }
 	const recpBuffer = proto.ServerErrorReceipt.encode(recp).finish()
 
@@ -988,7 +982,7 @@ export const decodeMediaRetryNode = (node: BinaryNode) => {
 
 export const decryptMediaRetryData = (
 	{ ciphertext, iv }: { ciphertext: Uint8Array; iv: Uint8Array },
-	mediaKey: Uint8Array | string, mediaKey: Uint8Array,
+	mediaKey: Uint8Array,
 	msgId: string
 ) => {
 	const retryKey = getMediaRetryKey(mediaKey)
