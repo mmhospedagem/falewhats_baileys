@@ -1052,14 +1052,19 @@ export const makeSocket = (config: SocketConfig) => {
 	// update credentials when required
 	ev.on('creds.update', update => {
 		const name = update.me?.name
+
 		// if name has just been received
-		if (typeof name === 'string' && name.length > 0 && creds.me?.name !== name) {if (creds.me?.name !== name) {
+		if (typeof name === 'string' && name.length > 0 && creds.me?.name !== name) {
 			logger.debug({ name }, 'updated pushName')
+
 			sendNode({
 				tag: 'presence',
 				attrs: { name }
 			}).catch(err => {
-				logger.warn({ trace: err.stack }, 'error in sending presence update on name change')
+				logger.warn(
+					{ trace: err.stack },
+					'error in sending presence update on name change'
+				)
 			})
 		}
 
